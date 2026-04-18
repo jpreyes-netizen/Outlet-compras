@@ -1144,7 +1144,9 @@ function SolView({cart,setCart,provs,users,cu,setOcs,addFirma,goOC,ocs,sucursale
 
     // ⭐ Notificar a Dir. Negocios (aprobador inicial) que hay una OC pendiente
     const aprobadores=(users||[]).filter(u=>u.activo&&u.correo&&(u.rol==="dir_negocios"||u.rol==="admin"))
-    const recipients=aprobadores.map(u=>u.correo).filter(e=>e!==cu.correo)
+    // admin/dir_general se auto-notifican (trazabilidad); otros roles quedan excluidos
+    const soloTraza=cu?.rol==="admin"||cu?.rol==="dir_general"
+    const recipients=aprobadores.map(u=>u.correo).filter(e=>soloTraza||e!==cu.correo)
     if(recipients.length>0){
       sendEmail({
         to:recipients,
@@ -1313,7 +1315,9 @@ function OCListView({ocs,firmas,pagos,updOC,addFirma,setDet,cu,h,provs,setOcs,us
       }
     }
     // Excluir al usuario que hizo la acción (no se auto-notifica)
-    if(cu?.correo)emails.delete(cu.correo)
+    // Excepción: admin y dir_general sí se auto-notifican para mantener trazabilidad completa
+    const soloTraza=cu?.rol==="admin"||cu?.rol==="dir_general"
+    if(cu?.correo&&!soloTraza)emails.delete(cu.correo)
     return Array.from(emails)
   }
 
@@ -1505,7 +1509,9 @@ function OCDetView({oc,firmas,pagos,updOC,addFirma,setPagos,close,cu,h,provs=[],
         users.filter(u=>u.activo&&u.correo&&u.rol===r).forEach(u=>emails.add(u.correo))
       }
     }
-    if(cu?.correo)emails.delete(cu.correo) // no auto-notificar
+    // No auto-notificar al usuario que hizo la acción. Excepción: admin/dir_general sí (trazabilidad)
+    const soloTraza=cu?.rol==="admin"||cu?.rol==="dir_general"
+    if(cu?.correo&&!soloTraza)emails.delete(cu.correo)
     const recipients=Array.from(emails)
     if(recipients.length===0)return
     const prov=provs.find(p=>p.id===oc.proveedor_id)
