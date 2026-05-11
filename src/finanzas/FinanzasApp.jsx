@@ -4,6 +4,7 @@ import { FinDashboard } from './FinDashboard'
 import { FinConciliacion } from './FinConciliacion'
 import { FinTesoreria } from './FinTesoreria'
 import { FinPresupuesto } from './FinPresupuesto'
+import { Toaster } from 'sonner'
 
 const ROLES=[
   {k:"admin",l:"Admin",c:"#FF3B30"},{k:"dir_general",l:"Dir. General",c:"#FF3B30"},
@@ -143,6 +144,9 @@ export function FinanzasApp({ cu, setAppActual }) {
       {tab === "conciliacion" && <FinConciliacion cu={cu} isMobile={isMobile} />}
       {tab === "tesoreria" && <FinTesoreria cu={cu} isMobile={isMobile} />}
       {tab === "presupuesto" && <FinPresupuesto cu={cu} isMobile={isMobile} />}
+
+      {/* TOASTER */}
+      <Toaster richColors position="top-right" />
 
       {/* BOTTOM TAB BAR */}
       <div style={{
