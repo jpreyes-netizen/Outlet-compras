@@ -10,4 +10,11 @@ input:focus,select:focus,textarea:focus{border-color:#1565C0!important;box-shado
 button{-webkit-tap-highlight-color:transparent}
 button:active{transform:scale(.97);transition:transform .1s}
 table{border-spacing:0}
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+/* Fix tabla ClasificarTab */
+.clasificar-table td,
+.clasificar-table th {
+  padding: 8px 12px;
+}

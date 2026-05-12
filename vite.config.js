@@ -7,4 +7,10 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  esbuild: {
+    jsx: 'automatic',
+  },
+  resolve: {
+    extensions: ['.tsx', '.ts', '.jsx', '.js'],
+  },
 })
