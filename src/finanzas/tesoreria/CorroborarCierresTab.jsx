@@ -32,7 +32,7 @@ function valoresCorrobInicial(c) {
   return v
 }
 
-const PUEDE_VER_TODAS = ['admin', 'contabilidad', 'jefe_admin_finanzas', 'gerente_admin_finanzas', 'admin_sistema']
+const PUEDE_VER_TODAS = ['contabilidad', 'jefe_admin_finanzas', 'gerente_admin_finanzas', 'admin_sistema', 'admin']
 
 export function CorroborarCierresTab({ usuario }) {
   const puedeElegirSuc = PUEDE_VER_TODAS.includes(usuario.rol)

@@ -1,413 +1,361 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Wallet, Receipt, Percent, Banknote, AlertTriangle, FileWarning, Loader2 } from 'lucide-react'
 import { supabase } from '../supabase'
 
-/* ═══ FIN DASHBOARD — KPIs de ventas y financiero ═══ */
+const MES_NOMBRES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE']
 
-const fmtPct = v => (v == null || isNaN(v)) ? "—" : Number(v).toFixed(1) + "%"
-const fmtM = v => {
-  if (v == null || isNaN(v)) return "—"
-  const m = Math.abs(v) / 1e6
-  const sign = v < 0 ? "-" : ""
-  if (m >= 1000) return sign + "$" + (m / 1000).toFixed(1) + "B"
-  if (m >= 1) return sign + "$" + m.toFixed(1) + "M"
-  return fmt(v)
+const fmtCLP = n => {
+  if (n == null || !Number.isFinite(Number(n))) return '—'
+  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Number(n))
+}
+const fmtMillones = n => `$${Math.round(n / 1_000_000)}M`
+const orDash = v => v == null || (typeof v === 'number' && !Number.isFinite(v)) ? '—' : String(v)
+
+function KpiCard({ title, value, icon: Icon, hint, valueColor, badge, loading }) {
+  const badgeColors = {
+    red: { bg: '#FEE2E2', color: '#DC2626', border: '#FECACA' },
+    amber: { bg: '#FEF3C7', color: '#D97706', border: '#FDE68A' },
+    green: { bg: '#DCFCE7', color: '#16A34A', border: '#BBF7D0' },
+  }
+  const bc = badge ? badgeColors[badge.tone] ?? badgeColors.green : null
+
+  return (
+    <div style={{ background: '#fff', borderRadius: 10, padding: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #F3F4F6' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9CA3AF', marginBottom: 6 }}>{title}</div>
+          {loading ? (
+            <div style={{ height: 32, width: 120, background: '#F3F4F6', borderRadius: 6, marginTop: 8, animation: 'pulse 1.5s infinite' }} />
+          ) : (
+            <div style={{ fontSize: 24, fontWeight: 700, color: valueColor ?? '#111827', marginTop: 4 }}>{value}</div>
+          )}
+          {hint && <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>{hint}</div>}
+          {badge && !loading && bc && (
+            <span style={{ display: 'inline-block', marginTop: 6, padding: '2px 8px', borderRadius: 99, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', background: bc.bg, color: bc.color, border: `1px solid ${bc.border}` }}>
+              {badge.text}
+            </span>
+          )}
+        </div>
+        <div style={{ width: 40, height: 40, borderRadius: 10, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 12 }}>
+          <Icon size={18} style={{ color: '#1F4E79' }} />
+        </div>
+      </div>
+    </div>
+  )
 }
 
-const semaforoColor = s => ({ verde: "#34C759", amarillo: "#FF9500", rojo: "#FF3B30" }[s] || "#8E8E93")
-const semaforoBg = s => ({ verde: "#34C75915", amarillo: "#FF950015", rojo: "#FF3B3015" }[s] || "#F2F2F7")
+function SectionError({ message }) {
+  return (
+    <div style={{ borderRadius: 8, border: '1px solid #FECACA', background: '#FEF2F2', padding: '10px 14px', fontSize: 13, color: '#DC2626' }}>
+      {message}
+    </div>
+  )
+}
 
 export function FinDashboard({ cu, isMobile }) {
-  const [loading, setLoading] = useState(true)
+  const now = new Date()
+  const mesActual = now.getMonth() + 1
+  const anioActual = now.getFullYear()
+
+  const [loading, setLoading] = useState({ f1: true, f2: true, f3: true, f4: true, f5: true, f6: true, f7: true })
   const [errors, setErrors] = useState({})
-  const [data, setData] = useState({
-    semaforo: null,
-    controlVentas: [],
-    forecast: [],
-    ventasMes: [],
-    topProveedores: [],
-    rankingVendedores: [],
-    eerrControl: [],
-    libroCompras: { mes: 0, facturas: 0 }
-  })
+  const [f1, setF1] = useState(null)
+  const [f2, setF2] = useState([])
+  const [f3, setF3] = useState([])
+  const [f4, setF4] = useState(null)
+  const [f5, setF5] = useState([])
+  const [f6, setF6] = useState(null)
+  const [f7, setF7] = useState([])
 
   useEffect(() => {
-    cargarDatos()
-  }, [])
+    const setErr = (k, msg) => setErrors(e => ({ ...e, [k]: msg }))
+    const setLoad = (k, v) => setLoading(s => ({ ...s, [k]: v }))
 
-  async function cargarDatos() {
-    setLoading(true)
-    const errs = {}
-    const out = { ...data }
+    const monthStart = (y, m) => `${y}-${String(m).padStart(2, '0')}-01`
+    const nextMonthStart = (y, m) => m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
+    const yearStart = y => `${y}-01-01`
 
-    const mesActual = new Date().getMonth() + 1
-    const anioActual = new Date().getFullYear()
-    const inicioMes = `${anioActual}-${String(mesActual).padStart(2, '0')}-01`
-    const finMes = new Date(anioActual, mesActual, 0).toISOString().split('T')[0]
+    const runF1 = async () => {
+      const { data, error } = await supabase.from('libro_compras').select('monto_neto,monto_iva,monto_total,anulado,fecha_emision').gte('fecha_emision', monthStart(anioActual, mesActual)).lt('fecha_emision', nextMonthStart(anioActual, mesActual))
+      if (error) { setErr('f1', error.message); setLoad('f1', false); return }
+      const rows = (data ?? []).filter(r => r.anulado !== true)
+      setF1({ facturas: rows.length, gasto_neto: rows.reduce((a, r) => a + Number(r.monto_neto ?? 0), 0), gasto_iva: rows.reduce((a, r) => a + Number(r.monto_iva ?? 0), 0), gasto_total: rows.reduce((a, r) => a + Number(r.monto_total ?? 0), 0) })
+      setLoad('f1', false)
+    }
 
-    // Semáforo presupuesto YTD
-    try {
-      const { data: r } = await supabase.from('v_semaforo_presupuesto').select('*').single()
-      out.semaforo = r
-    } catch (e) { errs.semaforo = e.message }
-
-    // Control ventas vs metas
-    try {
-      const { data: r } = await supabase.from('v_control_ventas')
-        .select('*')
-        .lte('mes_numero', mesActual)
-        .eq('anio', anioActual)
-        .order('sucursal_bsale')
-        .order('mes_numero')
-      out.controlVentas = r || []
-    } catch (e) { errs.controlVentas = e.message }
-
-    // Forecast anual
-    try {
-      const { data: r } = await supabase.from('v_forecast_ventas').select('*')
-      out.forecast = r || []
-    } catch (e) { errs.forecast = e.message }
-
-    // Venta mensual 2026
-    try {
-      const { data: r } = await supabase.from('ventas_bsale')
-        .select('fecha,total_venta,num_documentos')
-        .gte('fecha', `${anioActual}-01-01`)
-        .lte('fecha', `${anioActual}-12-31`)
-      // Agrupar por mes en cliente
-      const porMes = {}
-      ;(r || []).forEach(v => {
-        const m = new Date(v.fecha).getMonth() + 1
-        if (!porMes[m]) porMes[m] = { mes: m, total: 0, docs: 0 }
-        porMes[m].total += Number(v.total_venta) || 0
-        porMes[m].docs += Number(v.num_documentos) || 0
+    const runF2 = async () => {
+      const [vRes, gRes] = await Promise.all([
+        supabase.from('ventas_bsale').select('fecha,mes,total_venta').gte('fecha', yearStart(2026)).lt('fecha', yearStart(2027)),
+        supabase.from('libro_compras').select('fecha_emision,monto_total,anulado').gte('fecha_emision', yearStart(2026)).lt('fecha_emision', yearStart(2027)),
+      ])
+      if (vRes.error) { setErr('f2', vRes.error.message); setLoad('f2', false); return }
+      if (gRes.error) { setErr('f2', gRes.error.message); setLoad('f2', false); return }
+      const ventasMap = new Map()
+      for (const r of vRes.data ?? []) {
+        const m = new Date(r.fecha).getMonth() + 1
+        const cur = ventasMap.get(m) ?? { mes: r.mes ?? MES_NOMBRES[m - 1], venta_total: 0 }
+        cur.venta_total += Number(r.total_venta ?? 0)
+        ventasMap.set(m, cur)
+      }
+      const gastosMap = new Map()
+      for (const r of gRes.data ?? []) {
+        if (r.anulado === true) continue
+        const m = new Date(r.fecha_emision).getMonth() + 1
+        gastosMap.set(m, (gastosMap.get(m) ?? 0) + Number(r.monto_total ?? 0))
+      }
+      const allMeses = new Set([...ventasMap.keys(), ...gastosMap.keys()])
+      const rows = Array.from(allMeses).sort((a, b) => a - b).map(m => {
+        const v = ventasMap.get(m)?.venta_total ?? 0
+        const g = gastosMap.get(m) ?? 0
+        const mb = v - g
+        return { mes_num: m, mes: ventasMap.get(m)?.mes ?? MES_NOMBRES[m - 1], venta_total: v, gasto_total: g, margen_bruto: mb, margen_pct: v > 0 ? Math.round((mb / v) * 1000) / 10 : 0 }
       })
-      out.ventasMes = Object.values(porMes).sort((a, b) => a.mes - b.mes)
-    } catch (e) { errs.ventasMes = e.message }
+      setF2(rows); setLoad('f2', false)
+    }
 
-    // Top 5 proveedores mes actual
-    try {
-      const { data: r } = await supabase.from('libro_compras')
-        .select('razon_social,monto_total')
-        .neq('anulado', true)
-        .gte('fecha_emision', inicioMes)
-        .lte('fecha_emision', finMes)
-      const porProv = {}
-      ;(r || []).forEach(f => {
-        const k = f.razon_social || "Sin nombre"
-        if (!porProv[k]) porProv[k] = { nombre: k, total: 0, n: 0 }
-        porProv[k].total += Number(f.monto_total) || 0
-        porProv[k].n += 1
-      })
-      out.topProveedores = Object.values(porProv)
-        .sort((a, b) => b.total - a.total)
-        .slice(0, 5)
-      out.libroCompras.mes = (r || []).reduce((s, f) => s + (Number(f.monto_total) || 0), 0)
-      out.libroCompras.facturas = (r || []).length
-    } catch (e) { errs.topProveedores = e.message }
+    const runF3 = async () => {
+      const { data, error } = await supabase.from('movimientos_bancarios').select('mes_cartola,tipo,monto').not('mes_cartola', 'is', null)
+      if (error) { setErr('f3', error.message); setLoad('f3', false); return }
+      const map = new Map()
+      for (const r of data ?? []) {
+        const m = Number(r.mes_cartola)
+        if (!Number.isFinite(m)) continue
+        const cur = map.get(m) ?? { mes_num: m, total_abonos: 0, total_cargos: 0, flujo_neto: 0 }
+        const monto = Number(r.monto ?? 0)
+        if (r.tipo === 'ABONO') cur.total_abonos += monto
+        if (r.tipo === 'CARGO') cur.total_cargos += Math.abs(monto)
+        cur.flujo_neto += monto
+        map.set(m, cur)
+      }
+      setF3(Array.from(map.values()).sort((a, b) => a.mes_num - b.mes_num)); setLoad('f3', false)
+    }
 
-    // Ranking vendedores mes actual
-    try {
-      const { data: r } = await supabase.from('ventas_bsale')
-        .select('vendedor_bsale,sucursal_bsale,total_venta,num_documentos')
-        .gte('fecha', inicioMes)
-        .lte('fecha', finMes)
-      const porVendedor = {}
-      ;(r || []).forEach(v => {
-        const k = `${v.vendedor_bsale}|${v.sucursal_bsale}`
-        if (!porVendedor[k]) porVendedor[k] = {
-          nombre: v.vendedor_bsale, sucursal: v.sucursal_bsale, total: 0, docs: 0
-        }
-        porVendedor[k].total += Number(v.total_venta) || 0
-        porVendedor[k].docs += Number(v.num_documentos) || 0
-      })
-      out.rankingVendedores = Object.values(porVendedor)
-        .sort((a, b) => b.total - a.total)
-        .slice(0, 10)
-    } catch (e) { errs.rankingVendedores = e.message }
+    const runF4 = async () => {
+      const { data, error } = await supabase.from('movimientos_bancarios').select('subcuenta_id,tipo,monto,estado').eq('estado', 'pendiente')
+      if (error) { setErr('f4', error.message); setLoad('f4', false); return }
+      const rows = data ?? []
+      const total = rows.length
+      const clasif = rows.filter(r => r.subcuenta_id != null).length
+      const sinClas = total - clasif
+      setF4({ total_movimientos: total, clasificados: clasif, sin_clasificar: sinClas, pct_sin_clasificar: total > 0 ? Math.round((sinClas / total) * 1000) / 10 : 0, monto_cargos_sin_clasificar: rows.filter(r => r.subcuenta_id == null && r.tipo === 'CARGO').reduce((a, r) => a + Math.abs(Number(r.monto ?? 0)), 0), monto_abonos_sin_clasificar: rows.filter(r => r.subcuenta_id == null && r.tipo === 'ABONO').reduce((a, r) => a + Number(r.monto ?? 0), 0) })
+      setLoad('f4', false)
+    }
 
-    setData(out)
-    setErrors(errs)
-    setLoading(false)
-  }
+    const runF5 = async () => {
+      const { data, error } = await supabase.from('libro_compras').select('razon_social,monto_total,anulado,fecha_emision').gte('fecha_emision', monthStart(anioActual, mesActual)).lt('fecha_emision', nextMonthStart(anioActual, mesActual))
+      if (error) { setErr('f5', error.message); setLoad('f5', false); return }
+      const rows = (data ?? []).filter(r => r.anulado !== true)
+      const total = rows.reduce((a, r) => a + Number(r.monto_total ?? 0), 0)
+      const map = new Map()
+      for (const r of rows) { const k = r.razon_social ?? '—'; const cur = map.get(k) ?? { razon_social: k, facturas: 0, gasto_total: 0 }; cur.facturas += 1; cur.gasto_total += Number(r.monto_total ?? 0); map.set(k, cur) }
+      setF5(Array.from(map.values()).sort((a, b) => b.gasto_total - a.gasto_total).slice(0, 5).map(x => ({ ...x, pct_del_total: total > 0 ? Math.round((x.gasto_total / total) * 1000) / 10 : 0 })))
+      setLoad('f5', false)
+    }
 
-  // Cálculos derivados
-  const margenPct = useMemo(() => {
-    if (!data.semaforo) return null
-    const venta = Number(data.semaforo.venta_real_ytd) || 0
-    const gasto = Number(data.semaforo.gasto_real_ytd) || 0
-    if (venta === 0) return null
-    return ((venta - gasto) / venta) * 100
-  }, [data.semaforo])
+    const runF6 = async () => {
+      const { data, error } = await supabase.from('libro_compras').select('movimiento_id,monto_total,anulado,fecha_emision').gte('fecha_emision', yearStart(anioActual)).lt('fecha_emision', yearStart(anioActual + 1))
+      if (error) { setErr('f6', error.message); setLoad('f6', false); return }
+      const rows = (data ?? []).filter(r => r.anulado !== true)
+      const total = rows.length; const conc = rows.filter(r => r.movimiento_id != null).length; const sin = total - conc
+      setF6({ total_facturas: total, sin_conciliar: sin, conciliadas: conc, pct_conciliado: total > 0 ? Math.round((conc / total) * 1000) / 10 : 0, monto_pendiente: rows.filter(r => r.movimiento_id == null).reduce((a, r) => a + Number(r.monto_total ?? 0), 0) })
+      setLoad('f6', false)
+    }
 
-  if (loading) return (
-    <div style={{ minHeight: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 32, marginBottom: 8 }}>📊</div>
-        <div style={{ fontSize: 14, color: "#8E8E93" }}>Cargando indicadores...</div>
-      </div>
-    </div>
-  )
+    const runF7 = async () => {
+      const { data, error } = await supabase.from('libro_compras').select('fecha_emision,monto_total,anulado').gte('fecha_emision', '2024-01-01').lt('fecha_emision', '2027-01-01')
+      if (error) { setErr('f7', error.message); setLoad('f7', false); return }
+      const rows = (data ?? []).filter(r => r.anulado !== true)
+      const map = new Map()
+      for (const r of rows) {
+        const d = new Date(r.fecha_emision); const y = d.getFullYear(); const m = d.getMonth() + 1
+        const cur = map.get(m) ?? { mes_num: m, gasto_2024: 0, gasto_2025: 0, gasto_2026: 0 }
+        const v = Number(r.monto_total ?? 0)
+        if (y === 2024) cur.gasto_2024 += v; else if (y === 2025) cur.gasto_2025 += v; else if (y === 2026) cur.gasto_2026 += v
+        map.set(m, cur)
+      }
+      setF7(Array.from(map.values()).sort((a, b) => a.mes_num - b.mes_num)); setLoad('f7', false)
+    }
+
+    Promise.all([runF1(), runF2(), runF3(), runF4(), runF5(), runF6(), runF7()])
+  }, [mesActual, anioActual])
+
+  const margenMesActual = useMemo(() => f2.find(r => r.mes_num === mesActual) ?? null, [f2, mesActual])
+  const flujoMesActual = useMemo(() => f3.find(r => r.mes_num === mesActual) ?? null, [f3, mesActual])
+  const f7Filtrado = useMemo(() => f7.filter(r => r.mes_num >= 1 && r.mes_num <= 4), [f7])
+
+  const margenColor = !margenMesActual ? '#111827' : margenMesActual.margen_pct >= 60 ? '#16A34A' : margenMesActual.margen_pct >= 45 ? '#D97706' : '#DC2626'
+  const flujoColor = !flujoMesActual ? '#111827' : flujoMesActual.flujo_neto >= 0 ? '#16A34A' : '#DC2626'
+
+  const sinClasBadge = !f4 ? undefined : f4.pct_sin_clasificar === 100 ? { text: '100% pendiente', tone: 'red' } : f4.pct_sin_clasificar > 50 ? { text: `${f4.pct_sin_clasificar}% pendiente`, tone: 'amber' } : { text: `${f4.pct_sin_clasificar}% pendiente`, tone: 'green' }
+  const concBadge = !f6 ? undefined : f6.pct_conciliado === 0 ? { text: '0% conciliado', tone: 'red' } : f6.pct_conciliado < 50 ? { text: `${f6.pct_conciliado}% conciliado`, tone: 'amber' } : { text: `${f6.pct_conciliado}% conciliado`, tone: 'green' }
+
+  const TH = { padding: '8px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#9CA3AF', letterSpacing: '0.05em', textTransform: 'uppercase', borderBottom: '1px solid #F3F4F6' }
+  const TD = { padding: '8px', fontSize: 13, color: '#374151', borderBottom: '1px solid #F3F4F6' }
+  const cardSt = { background: '#fff', borderRadius: 10, padding: '16px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #F3F4F6' }
 
   return (
-    <div>
-      {/* === KPIs MACRO YTD === */}
-      <div style={{ marginBottom: 18 }}>
-        <SectionLabel>Resumen YTD · {data.semaforo?.mes_actual ? `enero a mes ${data.semaforo.mes_actual}` : "año en curso"}</SectionLabel>
-        <div className="kpi-grid" style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(auto-fit,minmax(150px,1fr))",
-          gap: 10
-        }}>
-          <KpiCard
-            label="Venta real YTD"
-            value={fmtM(data.semaforo?.venta_real_ytd)}
-            sub={`Meta: ${fmtM(data.semaforo?.meta_venta_ytd)}`}
-            color="#34C759"
-          />
-          <KpiCard
-            label="Avance meta"
-            value={fmtPct(data.semaforo?.avance_meta_pct)}
-            sub={data.semaforo?.semaforo_venta || "—"}
-            color={semaforoColor(data.semaforo?.semaforo_venta)}
-            bg={semaforoBg(data.semaforo?.semaforo_venta)}
-          />
-          <KpiCard
-            label="Gasto compras"
-            value={fmtM(data.semaforo?.gasto_real_ytd)}
-            sub={`${fN(data.libroCompras.facturas)} facturas`}
-            color="#FF9500"
-          />
-          <KpiCard
-            label="Margen bruto"
-            value={fmtPct(margenPct)}
-            sub={fmtM(data.semaforo?.margen_real_ytd)}
-            color={margenPct >= 50 ? "#34C759" : margenPct >= 30 ? "#FF9500" : "#FF3B30"}
-          />
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* Divider */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 8 }}>
+        <div style={{ flex: 1, height: 1, background: '#E5E7EB' }} />
+        <span style={{ padding: '4px 12px', borderRadius: 99, border: '1px solid #BFDBFE', background: '#EFF6FF', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1F4E79' }}>
+          Indicadores financieros
+        </span>
+        <div style={{ flex: 1, height: 1, background: '#E5E7EB' }} />
       </div>
 
-      {/* === FORECAST POR SUCURSAL === */}
-      {data.forecast.length > 0 && (
-        <div style={{ marginBottom: 18 }}>
-          <SectionLabel>Forecast anual por sucursal</SectionLabel>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit,minmax(240px,1fr))",
-            gap: 10
-          }}>
-            {data.forecast
-              .filter(f => Number(f.meses_reales) >= 2)
-              .map(f => (
-                <Card key={f.sucursal_bsale}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1C1C1E", marginBottom: 8 }}>
-                    {f.sucursal_bsale}
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                    <span style={{ fontSize: 11, color: "#8E8E93" }}>Real YTD</span>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{fmtM(f.real_ytd)}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                    <span style={{ fontSize: 11, color: "#8E8E93" }}>Forecast anual</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: semaforoColor(f.semaforo) }}>
-                      {fmtM(f.forecast_anual)}
-                    </span>
-                  </div>
-                  <ProgressBar
-                    value={Math.min(Number(f.forecast_pct) || 0, 150)}
-                    max={150}
-                    color={semaforoColor(f.semaforo)}
-                  />
-                  <div style={{ fontSize: 10, color: "#8E8E93", marginTop: 4, textAlign: "right" }}>
-                    {fmtPct(f.forecast_pct)} del ppto · ppto {fmtM(f.ppto_anual)}
-                  </div>
-                </Card>
-              ))}
+      {/* Errores KPIs */}
+      {(errors.f1 || errors.f4 || errors.f6) && (
+        <SectionError message={`Error cargando KPIs financieros: ${errors.f1 ?? errors.f4 ?? errors.f6}`} />
+      )}
+
+      {/* KPI Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+        <KpiCard title="Gasto del mes" value={fmtCLP(f1?.gasto_total)} icon={Wallet} hint={f1 ? `${orDash(f1.facturas)} facturas` : undefined} loading={loading.f1} />
+        <KpiCard title="Gasto neto (sin IVA)" value={fmtCLP(f1?.gasto_neto)} icon={Receipt} hint={f1 ? `IVA: ${fmtCLP(f1.gasto_iva)}` : undefined} loading={loading.f1} />
+        <KpiCard title="Margen bruto est." value={margenMesActual ? `${margenMesActual.margen_pct.toFixed(1)}%` : '—'} icon={Percent} valueColor={margenColor} loading={loading.f2} />
+        <KpiCard title="Flujo bancario neto" value={fmtCLP(flujoMesActual?.flujo_neto)} icon={Banknote} valueColor={flujoColor} loading={loading.f3} />
+        <KpiCard title="Sin clasificar" value={f4 ? new Intl.NumberFormat('es-CL').format(f4.sin_clasificar) : '—'} icon={AlertTriangle} badge={sinClasBadge} loading={loading.f4} />
+        <KpiCard title="Fact. sin conciliar" value={f6 ? new Intl.NumberFormat('es-CL').format(f6.sin_conciliar) : '—'} icon={FileWarning} hint={f6 ? `Expuesto: ${fmtCLP(f6.monto_pendiente)}` : undefined} badge={concBadge} loading={loading.f6} />
+      </div>
+
+      {/* Gráfico margen bruto */}
+      <div style={cardSt}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>Venta vs gasto vs margen bruto · 2026</div>
+          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9CA3AF' }}>en CLP</div>
+        </div>
+        {errors.f2 ? <SectionError message={`Error: ${errors.f2}`} /> :
+          loading.f2 ? <div style={{ height: 320, background: '#F9FAFB', borderRadius: 8 }} /> :
+          f2.length === 0 ? <div style={{ padding: '40px 0', textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>Sin datos</div> : (
+          <div style={{ height: 320 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={f2}>
+                <CartesianGrid stroke="#F3F4F6" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="mes" stroke="#9CA3AF" fontSize={11} />
+                <YAxis stroke="#9CA3AF" fontSize={11} tickFormatter={v => fmtMillones(Number(v))} />
+                <Tooltip
+                  cursor={{ fill: 'rgba(59,130,246,0.08)' }}
+                  contentStyle={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 12 }}
+                  formatter={(value, name, item) => {
+                    if (name === 'Margen bruto') { const pct = item?.payload?.margen_pct; return [`${fmtCLP(value)} (${pct != null ? pct.toFixed(1) : '—'}%)`, name] }
+                    return [fmtCLP(value), name]
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="venta_total" name="Venta" fill="#378ADD" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="gasto_total" name="Gasto" fill="#D85A30" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="margen_bruto" name="Margen bruto" fill="#639922" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* === VENTA MENSUAL === */}
-      {data.ventasMes.length > 0 && (
-        <div style={{ marginBottom: 18 }}>
-          <SectionLabel>Venta mensual {new Date().getFullYear()}</SectionLabel>
-          <Card>
-            <BarChart data={data.ventasMes} isMobile={isMobile} />
-          </Card>
-        </div>
-      )}
-
-      {/* === TOP PROVEEDORES + RANKING VENDEDORES === */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-        gap: 10,
-        marginBottom: 18
-      }}>
+      {/* Top proveedores + Flujo bancario */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         {/* Top proveedores */}
-        <div>
-          <SectionLabel>Top 5 proveedores · mes actual</SectionLabel>
-          <Card>
-            {data.topProveedores.length === 0 ? (
-              <EmptyState text="Sin datos del mes actual" />
-            ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                <tbody>
-                  {data.topProveedores.map((p, i) => (
-                    <tr key={i} style={{ borderBottom: i < 4 ? "1px solid #F2F2F7" : "none" }}>
-                      <td style={{ padding: "8px 0", color: "#1C1C1E", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.nombre}>
-                        {p.nombre}
-                      </td>
-                      <td style={{ padding: "8px 0", textAlign: "right", color: "#8E8E93", fontSize: 11 }}>
-                        {p.n} fact.
-                      </td>
-                      <td style={{ padding: "8px 0", textAlign: "right", fontWeight: 600 }}>
-                        {fmtM(p.total)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
+        <div style={cardSt}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 14 }}>Top 5 proveedores — mes actual</div>
+          {errors.f5 ? <SectionError message={`Error: ${errors.f5}`} /> :
+            loading.f5 ? <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{Array.from({ length: 5 }).map((_, i) => <div key={i} style={{ height: 48, background: '#F3F4F6', borderRadius: 8 }} />)}</div> :
+            f5.length === 0 ? <div style={{ padding: '32px 0', textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>Sin datos</div> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {f5.map(p => (
+                <div key={p.razon_social} style={{ border: '1px solid #F3F4F6', borderRadius: 8, padding: '10px 12px', background: '#FAFAFA' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.razon_social}>{p.razon_social}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', flexShrink: 0 }}>{fmtCLP(p.gasto_total)}</div>
+                  </div>
+                  <div style={{ marginTop: 8, height: 6, background: '#E5E7EB', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.min(100, Math.max(0, p.pct_del_total))}%`, background: '#1F4E79', borderRadius: 99 }} />
+                  </div>
+                  <div style={{ marginTop: 4, display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#9CA3AF' }}>
+                    <span>{p.facturas} facturas</span>
+                    <span>{p.pct_del_total.toFixed(1)}% del total</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Ranking vendedores */}
-        <div>
-          <SectionLabel>Ranking vendedores · mes actual</SectionLabel>
-          <Card>
-            {data.rankingVendedores.length === 0 ? (
-              <EmptyState text="Sin ventas del mes actual" />
-            ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+        {/* Flujo bancario */}
+        <div style={cardSt}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 14 }}>Flujo bancario mensual</div>
+          {errors.f3 ? <SectionError message={`Error: ${errors.f3}`} /> :
+            loading.f3 ? <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{Array.from({ length: 6 }).map((_, i) => <div key={i} style={{ height: 36, background: '#F3F4F6', borderRadius: 8 }} />)}</div> :
+            f3.length === 0 ? <div style={{ padding: '32px 0', textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>Sin datos</div> : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={TH}>Mes</th>
+                    <th style={{ ...TH, textAlign: 'right' }}>Abonos</th>
+                    <th style={{ ...TH, textAlign: 'right' }}>Cargos</th>
+                    <th style={{ ...TH, textAlign: 'right' }}>Flujo neto</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {data.rankingVendedores.slice(0, 8).map((v, i) => (
-                    <tr key={i} style={{ borderBottom: i < 7 ? "1px solid #F2F2F7" : "none" }}>
-                      <td style={{ padding: "8px 0", width: 24, color: "#8E8E93", fontSize: 11, fontWeight: 600 }}>
-                        #{i + 1}
-                      </td>
-                      <td style={{ padding: "8px 0", color: "#1C1C1E" }} title={v.nombre}>
-                        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>
-                          {v.nombre}
-                        </div>
-                        <div style={{ fontSize: 10, color: "#AEAEB2", marginTop: 1 }}>
-                          {v.sucursal}
-                        </div>
-                      </td>
-                      <td style={{ padding: "8px 0", textAlign: "right", fontWeight: 600 }}>
-                        {fmtM(v.total)}
-                      </td>
-                    </tr>
-                  ))}
+                  {f3.map(r => {
+                    const positivo = r.flujo_neto >= 0
+                    const esActual = r.mes_num === mesActual
+                    return (
+                      <tr key={r.mes_num} style={{ background: esActual ? '#EFF6FF' : 'transparent' }}>
+                        <td style={{ ...TD, fontWeight: 500 }}>{MES_NOMBRES[r.mes_num - 1] ?? `Mes ${r.mes_num}`}</td>
+                        <td style={{ ...TD, textAlign: 'right', color: '#16A34A' }}>{fmtCLP(r.total_abonos)}</td>
+                        <td style={{ ...TD, textAlign: 'right', color: '#DC2626' }}>{fmtCLP(r.total_cargos)}</td>
+                        <td style={{ ...TD, textAlign: 'right', fontWeight: 700, color: positivo ? '#16A34A' : '#DC2626' }}>{fmtCLP(r.flujo_neto)}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
-            )}
-          </Card>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* === Errores si hay === */}
-      {Object.keys(errors).length > 0 && (
-        <div style={{
-          background: "#FF3B3015", border: "1px solid #FF3B3030",
-          borderRadius: 12, padding: 12, marginBottom: 18, fontSize: 12, color: "#FF3B30"
-        }}>
-          <strong>Algunos datos no cargaron:</strong>
-          <ul style={{ marginLeft: 18, marginTop: 4 }}>
-            {Object.entries(errors).map(([k, v]) => <li key={k}>{k}: {v}</li>)}
-          </ul>
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ═══ Sub-componentes ═══ */
-
-function SectionLabel({ children }) {
-  return (
-    <div style={{
-      fontSize: 11, fontWeight: 600, letterSpacing: "0.04em",
-      textTransform: "uppercase", color: "#8E8E93",
-      marginBottom: 8, paddingBottom: 4, borderBottom: "1px solid rgba(0,0,0,0.06)"
-    }}>{children}</div>
-  )
-}
-
-function KpiCard({ label, value, sub, color, bg }) {
-  return (
-    <div style={{
-      background: bg || "#fff",
-      borderRadius: 14,
-      padding: "14px 16px",
-      border: "1px solid rgba(0,0,0,0.04)",
-      boxShadow: "0 1px 2px rgba(0,0,0,0.04)"
-    }}>
-      <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: color || "#1C1C1E", letterSpacing: "-0.02em" }}>
-        {value}
-      </div>
-      {sub && <div style={{ fontSize: 11, color: "#8E8E93", marginTop: 2 }}>{sub}</div>}
-    </div>
-  )
-}
-
-function Card({ children }) {
-  return (
-    <div style={{
-      background: "#fff", borderRadius: 14, padding: "14px 16px",
-      border: "1px solid rgba(0,0,0,0.04)",
-      boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
-    }}>{children}</div>
-  )
-}
-
-function ProgressBar({ value, max = 100, color = "#34C759" }) {
-  const pct = Math.min((value / max) * 100, 100)
-  return (
-    <div style={{ height: 6, background: "#F2F2F7", borderRadius: 3, overflow: "hidden" }}>
-      <div style={{
-        height: "100%", width: pct + "%",
-        background: color, borderRadius: 3, transition: "width 0.4s"
-      }} />
-    </div>
-  )
-}
-
-function EmptyState({ text }) {
-  return (
-    <div style={{ padding: "20px 0", textAlign: "center", color: "#AEAEB2", fontSize: 12 }}>
-      {text}
-    </div>
-  )
-}
-
-function BarChart({ data, isMobile }) {
-  const max = Math.max(...data.map(d => d.total), 1)
-  const meses = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-  const altura = 140
-
-  return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: isMobile ? 4 : 8, height: altura + 30, paddingTop: 8 }}>
-      {data.map(d => {
-        const h = (d.total / max) * altura
-        return (
-          <div key={d.mes} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-            <div style={{
-              fontSize: 9, color: "#8E8E93", fontWeight: 600, marginBottom: 2,
-              opacity: d.total > 0 ? 1 : 0.3
-            }}>{fmtM(d.total)}</div>
-            <div style={{
-              width: "100%", height: h, minHeight: d.total > 0 ? 2 : 0,
-              background: "#34C759", borderRadius: "4px 4px 0 0",
-              transition: "height 0.4s"
-            }} />
-            <div style={{ fontSize: 10, color: "#8E8E93", fontWeight: 500 }}>{meses[d.mes]}</div>
+      {/* Comparativa YoY */}
+      <div style={cardSt}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 14 }}>Comparativa gasto compras año a año</div>
+        {errors.f7 ? <SectionError message={`Error: ${errors.f7}`} /> :
+          loading.f7 ? <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{Array.from({ length: 4 }).map((_, i) => <div key={i} style={{ height: 36, background: '#F3F4F6', borderRadius: 8 }} />)}</div> :
+          f7Filtrado.length === 0 ? <div style={{ padding: '32px 0', textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>Sin datos</div> : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={TH}>Mes</th>
+                  <th style={{ ...TH, textAlign: 'right' }}>2024</th>
+                  <th style={{ ...TH, textAlign: 'right' }}>2025</th>
+                  <th style={{ ...TH, textAlign: 'right' }}>2026</th>
+                  <th style={{ ...TH, textAlign: 'right' }}>Var % 26 vs 25</th>
+                </tr>
+              </thead>
+              <tbody>
+                {f7Filtrado.map(r => {
+                  const varPct = r.gasto_2025 > 0 ? ((r.gasto_2026 - r.gasto_2025) / r.gasto_2025) * 100 : null
+                  const varColor = varPct == null ? '#9CA3AF' : varPct < 0 ? '#16A34A' : varPct <= 15 ? '#D97706' : '#DC2626'
+                  return (
+                    <tr key={r.mes_num}>
+                      <td style={{ ...TD, fontWeight: 500 }}>{MES_NOMBRES[r.mes_num - 1] ?? `Mes ${r.mes_num}`}</td>
+                      <td style={{ ...TD, textAlign: 'right', color: '#9CA3AF' }}>{fmtCLP(r.gasto_2024)}</td>
+                      <td style={{ ...TD, textAlign: 'right', color: '#9CA3AF' }}>{fmtCLP(r.gasto_2025)}</td>
+                      <td style={{ ...TD, textAlign: 'right', fontWeight: 600 }}>{fmtCLP(r.gasto_2026)}</td>
+                      <td style={{ ...TD, textAlign: 'right', fontWeight: 700, color: varColor }}>
+                        {varPct == null ? '—' : `${varPct >= 0 ? '+' : ''}${varPct.toFixed(1)}%`}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
-        )
-      })}
+        )}
+      </div>
     </div>
   )
 }
-
-const fmt = n => new Intl.NumberFormat("es-CL",{style:"currency",currency:"CLP",maximumFractionDigits:0}).format(n||0)
-const fN = n => new Intl.NumberFormat("es-CL").format(Math.round(n||0))
