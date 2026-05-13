@@ -71,31 +71,49 @@ export async function corroborarCierre(p) {
 }
 
 export async function fetchCierres(filtros) {
+  // Sin join directo — evita error por FK faltante en vendedor_id (registros migrados)
   let q = supabase.from('cierres_caja')
-    .select('*, vendedor:usuarios!cierres_caja_vendedor_id_fkey(nombre), sucursal:sucursales(nombre)')
+    .select('*')
     .order('fecha', { ascending: false })
   if (filtros.sucursal_id) q = q.eq('sucursal_id', filtros.sucursal_id)
   if (filtros.vendedor_id) q = q.eq('vendedor_id', filtros.vendedor_id)
   if (filtros.fecha_desde) q = q.gte('fecha', filtros.fecha_desde)
   if (filtros.fecha_hasta) q = q.lte('fecha', filtros.fecha_hasta)
   if (filtros.estados && filtros.estados.length > 0) q = q.in('estado', filtros.estados)
+
   const { data, error } = await q
-  if (error) {
-    // fallback sin joins
-    let q2 = supabase.from('cierres_caja').select('*').order('fecha', { ascending: false })
-    if (filtros.sucursal_id) q2 = q2.eq('sucursal_id', filtros.sucursal_id)
-    if (filtros.fecha_desde) q2 = q2.gte('fecha', filtros.fecha_desde)
-    if (filtros.fecha_hasta) q2 = q2.lte('fecha', filtros.fecha_hasta)
-    if (filtros.estados && filtros.estados.length > 0) q2 = q2.in('estado', filtros.estados)
-    const { data: d2, error: e2 } = await q2
-    if (e2) throw e2
-    return (d2 ?? []).map(c => ({ ...c, vendedor_nombre: null, sucursal_nombre: null }))
+  if (error) throw error
+
+  const rows = data ?? []
+
+  // Nombres de sucursales en una sola query adicional
+  const sucIds = [...new Set(rows.map(r => r.sucursal_id).filter(Boolean))]
+  let sucMap = {}
+  if (sucIds.length > 0) {
+    const { data: sucs } = await supabase.from('sucursales').select('id, nombre').in('id', sucIds)
+    for (const s of sucs ?? []) sucMap[s.id] = s.nombre
   }
-  return (data ?? []).map(r => ({
-    ...r,
-    vendedor_nombre: r.vendedor?.nombre ?? null,
-    sucursal_nombre: r.sucursal?.nombre ?? null,
-  }))
+
+  // Nombres de vendedores en una sola query (solo los que tienen vendedor_id real)
+  const vendIds = [...new Set(rows.map(r => r.vendedor_id).filter(Boolean))]
+  let vendMap = {}
+  if (vendIds.length > 0) {
+    const { data: vends } = await supabase.from('usuarios').select('id, nombre').in('id', vendIds)
+    for (const v of vends ?? []) vendMap[v.id] = v.nombre
+  }
+
+  return rows.map(r => {
+    // Registros migrados: extraer nombre desde observaciones_admin
+    let vendedor_nombre = r.vendedor_id ? (vendMap[r.vendedor_id] ?? null) : null
+    if (!vendedor_nombre && r.observaciones_admin?.startsWith('[MIGRADO] Vendedor: ')) {
+      vendedor_nombre = r.observaciones_admin.replace('[MIGRADO] Vendedor: ', '').trim()
+    }
+    return {
+      ...r,
+      vendedor_nombre,
+      sucursal_nombre: r.sucursal_id ? (sucMap[r.sucursal_id] ?? null) : null,
+    }
+  })
 }
 
 export async function fetchDepositosEfectivo(filtros) {
