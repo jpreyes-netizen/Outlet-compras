@@ -68,7 +68,7 @@ export function DeclararCierreTab({ usuario }) {
   useEffect(() => {
     if (!sucursalId) return
     setLoadingBsale(true)
-    fetchVentaBsale(fecha, sucursalId, usuario.id).then(setVentaBsale).catch(() => setVentaBsale(null)).finally(() => setLoadingBsale(false))
+    fetchVentaBsale(fecha, sucursalId).then(setVentaBsale).catch(() => setVentaBsale(null)).finally(() => setLoadingBsale(false))
   }, [fecha, sucursalId, usuario.id])
 
   const total = useMemo(() => MEDIOS.reduce((s, m) => s + (valores[m.key] || 0), 0), [valores])
