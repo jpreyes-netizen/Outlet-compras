@@ -24,12 +24,22 @@ export async function fetchCierreDelDia(vendedorId, fecha) {
   return data ?? null
 }
 
-export async function fetchVentaBsale(fecha, sucursal_id, vendedor_id) {
-  const { data, error } = await supabase.from('ventas_bsale').select('total_venta').eq('fecha', fecha).eq('sucursal_id', sucursal_id).eq('vendedor_id', vendedor_id)
-  if (error) { console.warn('[ventas_bsale]', error.message); return null }
-  const rows = data ?? []
-  if (rows.length === 0) return 0
-  return rows.reduce((s, r) => s + Number(r.total_venta ?? 0), 0)
+export async function fetchVentaBsale(fecha, sucursal_id) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    const headers = { 'Content-Type': 'application/json' }
+    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/bsale-ventas-dia`,
+      { method: 'POST', headers, body: JSON.stringify({ fecha, sucursal_id }) }
+    )
+    if (!res.ok) return null
+    const json = await res.json()
+    return json.total ?? null
+  } catch (e) {
+    console.warn('[fetchVentaBsale]', e.message)
+    return null
+  }
 }
 
 export async function declararCierre(p) {
