@@ -49,8 +49,7 @@ export function FinTesoreria({ cu, isMobile }) {
         ))}
       </div>
 
-      {tab === 'declarar' && <DeclararCierreTab usuario={usuario} />}
-      {tab === 'corroborar' && <CorroborarCierresTab usuario={usuario} />}
+      {tab === 'cierre' && <CierreDelDiaTab usuario={usuario} />}
       {tab === 'depositos' && <DepositosAbonosTab usuario={usuario} />}
       {tab === 'cuadratura' && <CuadraturaTab usuario={usuario} />}
       {tab === 'analisis'     && <AnalisisTab           usuario={usuario} />}
