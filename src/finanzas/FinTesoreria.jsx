@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabase'
-import { DeclararCierreTab } from './tesoreria/DeclararCierreTab'
-import { CorroborarCierresTab } from './tesoreria/CorroborarCierresTab'
+import { CierreDelDiaTab } from './tesoreria/CierreDelDiaTab'
 import { DepositosAbonosTab } from './tesoreria/DepositosAbonosTab'
 import { CuadraturaTab } from './tesoreria/CuadraturaTab'
 import { AnalisisTab } from './tesoreria/AnalisisTab'
