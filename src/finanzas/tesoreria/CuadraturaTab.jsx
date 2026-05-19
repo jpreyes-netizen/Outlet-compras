@@ -1,0 +1,699 @@
+import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
+import { Download, Loader2, ChevronDown, ChevronUp, Info } from 'lucide-react'
+import { formatCLP, cardSt, selectSt, labelSt, btnOutlineSt, TH, TD, estadoBadge } from './types'
+import { fetchCierres, fetchKpisMes, fetchSucursales, fetchCuadraturasMes } from './api'
+
+const PUEDE_TODO = ['admin', 'contabilidad', 'jefe_admin_finanzas', 'gerente_admin_finanzas', 'gerencia', 'admin_sistema']
+const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+const fmt = n => formatCLP(n ?? 0)
+
+function KpiCard({ title, value, color, sub }) {
+  return (
+    <div style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #F3F4F6' }}>
+      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF', marginBottom: 6 }}>{title}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: color ?? '#111827' }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 3 }}>{sub}</div>}
+    </div>
+  )
+}
+
+const MEDIOS_DESGLOSE = [
+  { key: 'efectivo',      label: 'Efectivo',           color: '#16A34A' },
+  { key: 't_credito',     label: 'Crédito (Getnet)',   color: '#7C3AED' },
+  { key: 't_debito',      label: 'Débito (Getnet)',    color: '#2563EB' },
+  { key: 'webpay',        label: 'Webpay',             color: '#0891B2' },
+  { key: 'transferencia', label: 'Transferencia',      color: '#D97706' },
+  { key: 'm_pago',        label: 'Mercado Pago',       color: '#059669' },
+  { key: 'abono_cliente', label: 'Abono cliente',      color: '#9CA3AF' },
+  { key: 'canje',         label: 'Canje',              color: '#9CA3AF' },
+  { key: 'p_clay',        label: 'Puntos Clay',        color: '#9CA3AF' },
+  { key: 'cheque',        label: 'Cheque',             color: '#9CA3AF' },
+]
+
+function PanelMediosPago({ cierres }) {
+  const [open, setOpen] = useState(false)
+
+  // Acumular declarado y corroborado por medio, solo cierres con algún dato
+  const totales = useMemo(() => {
+    return MEDIOS_DESGLOSE.map(med => {
+      const decl   = cierres.reduce((s, c) => s + Number(c[med.key]                ?? 0), 0)
+      const corrob = cierres.reduce((s, c) => s + Number(c[`${med.key}_corrob`]    ?? 0), 0)
+      const diff   = corrob - decl
+      const tieneData = decl > 0 || corrob > 0
+      return { ...med, decl, corrob, diff, tieneData }
+    }).filter(m => m.tieneData)
+  }, [cierres])
+
+  const totalDecl   = totales.reduce((s, m) => s + m.decl, 0)
+  const totalCorrob = totales.reduce((s, m) => s + m.corrob, 0)
+  const totalDiff   = totalCorrob - totalDecl
+
+  if (!totales.length) return null
+
+  return (
+    <div style={{ ...cardSt, padding: 0, overflow: 'hidden' }}>
+      <button onClick={() => setOpen(v => !v)}
+        style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center',
+          padding: '14px 16px', background: 'none', border: 'none', cursor: 'pointer',
+          borderBottom: open ? '1px solid #F3F4F6' : 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>Desglose por medio de pago</span>
+          <span style={{ fontSize: 11, color: '#6B7280', background: '#F3F4F6', padding: '2px 8px', borderRadius: 10 }}>
+            Declarado vs Corroborado · acumulado mes
+          </span>
+        </div>
+        {open ? <ChevronUp size={16} color="#6B7280" /> : <ChevronDown size={16} color="#6B7280" />}
+      </button>
+
+      {open && (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: '#F9FAFB' }}>
+                <th style={{ ...TH, textAlign: 'left', width: 160 }}>Medio</th>
+                <th style={{ ...TH, textAlign: 'right' }}>Declarado</th>
+                <th style={{ ...TH, textAlign: 'right' }}>Corroborado</th>
+                <th style={{ ...TH, textAlign: 'right' }}>Diferencia</th>
+                <th style={{ ...TH, textAlign: 'left', width: 200 }}>Barra</th>
+              </tr>
+            </thead>
+            <tbody>
+              {totales.map(m => {
+                const diffColor = m.diff === 0 ? '#16A34A' : Math.abs(m.diff) < 20000 ? '#D97706' : '#DC2626'
+                // Barra comparativa: declarado = base, corroborado = overlay
+                const maxVal = Math.max(m.decl, m.corrob, 1)
+                const pctDecl   = (m.decl   / maxVal) * 100
+                const pctCorrob = (m.corrob / maxVal) * 100
+                return (
+                  <tr key={m.key} style={{ borderTop: '1px solid #F3F4F6' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <td style={{ ...TD }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: m.color, flexShrink: 0 }} />
+                        <span style={{ fontWeight: 500 }}>{m.label}</span>
+                      </div>
+                    </td>
+                    <td style={{ ...TD, textAlign: 'right' }}>{fmt(m.decl)}</td>
+                    <td style={{ ...TD, textAlign: 'right' }}>{m.corrob === 0 && m.decl > 0 ? <span style={{ color: '#9CA3AF' }}>Pend.</span> : fmt(m.corrob)}</td>
+                    <td style={{ ...TD, textAlign: 'right', fontWeight: 600, color: diffColor }}>
+                      {m.corrob === 0 && m.decl > 0 ? '—' : `${m.diff >= 0 ? '+' : ''}${fmt(m.diff)}`}
+                    </td>
+                    <td style={{ ...TD }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {/* Barra declarado */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ fontSize: 9, color: '#9CA3AF', width: 16, textAlign: 'right' }}>D</div>
+                          <div style={{ flex: 1, height: 6, background: '#F3F4F6', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{ width: `${pctDecl}%`, height: '100%', background: m.color, opacity: 0.5, borderRadius: 3 }} />
+                          </div>
+                        </div>
+                        {/* Barra corroborado */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ fontSize: 9, color: '#9CA3AF', width: 16, textAlign: 'right' }}>C</div>
+                          <div style={{ flex: 1, height: 6, background: '#F3F4F6', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{ width: `${pctCorrob}%`, height: '100%', background: m.color, borderRadius: 3 }} />
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+              {/* Fila totales */}
+              <tr style={{ borderTop: '2px solid #E5E7EB', background: '#F9FAFB' }}>
+                <td style={{ ...TD, fontWeight: 700 }}>TOTAL</td>
+                <td style={{ ...TD, textAlign: 'right', fontWeight: 700 }}>{fmt(totalDecl)}</td>
+                <td style={{ ...TD, textAlign: 'right', fontWeight: 700 }}>{fmt(totalCorrob)}</td>
+                <td style={{ ...TD, textAlign: 'right', fontWeight: 700,
+                  color: totalDiff === 0 ? '#16A34A' : Math.abs(totalDiff) < 50000 ? '#D97706' : '#DC2626' }}>
+                  {totalDiff >= 0 ? '+' : ''}{fmt(totalDiff)}
+                </td>
+                <td style={TD} />
+              </tr>
+            </tbody>
+          </table>
+          <div style={{ padding: '10px 16px', borderTop: '1px solid #F3F4F6', fontSize: 11, color: '#9CA3AF' }}>
+            D = Declarado por vendedor · C = Corroborado por admin · "Pend." = cierres declarados pero no corroborados aún
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function InformativoDiferencias({ cierres, loadingCierres }) {
+  const analisis = useMemo(() => {
+    if (!cierres.length) return null
+
+    const declarados   = cierres.filter(c => c.estado === 'declarado')
+    const corroborados = cierres.filter(c => ['cuadra','tolerable','descuadre','conciliado'].includes(c.estado))
+    const descuadres   = cierres.filter(c => c.estado === 'descuadre')
+    const sinCierre    = cierres.filter(c => !c.total_declarado || c.total_declarado === 0)
+
+    const montoDeclaradosPend = declarados.reduce((s, c) => s + Number(c.total_declarado ?? 0), 0)
+    const montoDescuadre      = descuadres.reduce((s, c) => s + Math.abs(Number(c.diferencia ?? 0)), 0)
+    const totalDiff = cierres.reduce((s, c) => s + Number(c.total_declarado ?? 0), 0)
+                    - cierres.reduce((s, c) => s + Number(c.total_corroborado ?? 0), 0)
+
+    // Medio con mayor diferencia
+    const diffPorMedio = MEDIOS_DESGLOSE.map(m => ({
+      label: m.label,
+      diff: cierres.reduce((s, c) => s + Number(c[`${m.key}_corrob`] ?? 0) - Number(c[m.key] ?? 0), 0),
+    })).filter(m => m.diff !== 0).sort((a, b) => a.diff - b.diff)
+
+    const peorMedio = diffPorMedio[0] ?? null
+
+    // Vendedor con mayor descuadre
+    const descuadrePorVendedor = descuadres.reduce((acc, c) => {
+      const nom = c.vendedor_nombre ?? c.bsale_vendedor_id ?? 'Desconocido'
+      acc[nom] = (acc[nom] ?? 0) + Math.abs(Number(c.diferencia ?? 0))
+      return acc
+    }, {})
+    const peorVendedor = Object.entries(descuadrePorVendedor)
+      .sort(([,a],[,b]) => b - a)[0] ?? null
+
+    // Clasificar causas
+    const causas = []
+
+    if (declarados.length > 0) {
+      causas.push({
+        tipo: 'pendiente',
+        icono: '⏳',
+        titulo: `${declarados.length} cierre${declarados.length > 1 ? 's' : ''} sin corroborar`,
+        detalle: `Explica ${fmt(montoDeclaradosPend)} de la diferencia total. Los vendedores declararon pero el admin aún no ha corroborado.`,
+        monto: montoDeclaradosPend,
+        color: '#D97706',
+        bg: '#FFFBEB',
+        border: '#FDE68A',
+        accion: 'Ir a Cierre del día y corroborar los cierres pendientes.',
+      })
+    }
+
+    if (descuadres.length > 0) {
+      causas.push({
+        tipo: 'descuadre',
+        icono: '⚠',
+        titulo: `${descuadres.length} cierre${descuadres.length > 1 ? 's' : ''} con descuadre real`,
+        detalle: `Diferencia de ${fmt(montoDescuadre)} entre lo declarado y lo contado físicamente.${peorVendedor ? ` Mayor descuadre: ${peorVendedor[0]} (${fmt(peorVendedor[1])}).` : ''}`,
+        monto: montoDescuadre,
+        color: '#DC2626',
+        bg: '#FEF2F2',
+        border: '#FECACA',
+        accion: 'Revisar cierres en descuadre — pueden ser errores de declaración, plata faltante o abonos no registrados.',
+      })
+    }
+
+    if (peorMedio && Math.abs(peorMedio.diff) > 50000) {
+      causas.push({
+        tipo: 'medio',
+        icono: '💳',
+        titulo: `${peorMedio.label} es el medio con mayor diferencia`,
+        detalle: `Diferencia acumulada de ${fmt(peorMedio.diff)} en este medio. Puede incluir cierres pendientes de corroborar.`,
+        monto: Math.abs(peorMedio.diff),
+        color: '#7C3AED',
+        bg: '#F5F3FF',
+        border: '#DDD6FE',
+        accion: peorMedio.label === 'Débito (Getnet)' || peorMedio.label === 'Crédito (Getnet)'
+          ? 'Verificar cartola Getnet del mes contra lo corroborado.'
+          : peorMedio.label === 'Webpay'
+          ? 'Verificar abonos Transbank del mes contra lo corroborado.'
+          : 'Revisar respaldos de este medio.',
+      })
+    }
+
+    // Estado general
+    const pctPendiente = totalDiff > 0 ? (montoDeclaradosPend / totalDiff) * 100 : 0
+    const estadoGeneral = declarados.length === 0 && descuadres.length === 0
+      ? { label: 'Mes cerrado sin diferencias', color: '#16A34A', bg: '#DCFCE7' }
+      : declarados.length > 0 && descuadres.length === 0
+        ? { label: 'Solo pendientes de corroborar — sin descuadres reales', color: '#D97706', bg: '#FEF9C3' }
+        : { label: `Hay descuadres reales que requieren revisión`, color: '#DC2626', bg: '#FEF2F2' }
+
+    return { causas, totalDiff, montoDeclaradosPend, montoDescuadre, pctPendiente, estadoGeneral, declarados, descuadres }
+  }, [cierres])
+
+  if (loadingCierres || !analisis || !analisis.causas.length) return null
+
+  return (
+    <div style={{ ...cardSt, padding: 0, overflow: 'hidden' }}>
+      {/* Header con estado general */}
+      <div style={{ padding: '14px 16px', borderBottom: '1px solid #F3F4F6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>Análisis de diferencias</span>
+        <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 10,
+          background: analisis.estadoGeneral.bg, color: analisis.estadoGeneral.color }}>
+          {analisis.estadoGeneral.label}
+        </span>
+      </div>
+
+      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+        {/* Resumen rápido */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+          <div style={{ background: '#F9FAFB', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>{fmt(Math.abs(analisis.totalDiff))}</div>
+            <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>Diferencia total del mes</div>
+          </div>
+          <div style={{ background: '#FFFBEB', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#D97706' }}>{fmt(analisis.montoDeclaradosPend)}</div>
+            <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
+              Pendiente de corroborar ({analisis.declarados.length} cierre{analisis.declarados.length !== 1 ? 's' : ''})
+            </div>
+          </div>
+          <div style={{ background: '#FEF2F2', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#DC2626' }}>{fmt(analisis.montoDescuadre)}</div>
+            <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
+              Descuadre real ({analisis.descuadres.length} cierre{analisis.descuadres.length !== 1 ? 's' : ''})
+            </div>
+          </div>
+          <div style={{ background: '#F0FDF4', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#16A34A' }}>
+              {fmt(Math.max(0, Math.abs(analisis.totalDiff) - analisis.montoDeclaradosPend - analisis.montoDescuadre))}
+            </div>
+            <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>Sin causa identificada</div>
+          </div>
+        </div>
+
+        {/* Causas identificadas */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {analisis.causas.map((causa, i) => (
+            <div key={i} style={{ background: causa.bg, border: `1px solid ${causa.border}`, borderRadius: 8, padding: '12px 14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 14 }}>{causa.icono}</span>
+                    <span style={{ fontWeight: 600, fontSize: 13, color: causa.color }}>{causa.titulo}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#374151', marginBottom: 6 }}>{causa.detalle}</div>
+                  <div style={{ fontSize: 11, color: '#6B7280', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>→ Acción:</span> {causa.accion}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: causa.color }}>{fmt(causa.monto)}</div>
+                  <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>
+                    {analisis.totalDiff > 0 ? Math.round((causa.monto / Math.abs(analisis.totalDiff)) * 100) : 0}% del total
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Detalle cierres pendientes */}
+        {analisis.declarados.length > 0 && (
+          <div style={{ background: '#FFFBEB', borderRadius: 8, padding: '10px 14px', border: '1px solid #FDE68A' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#92400E', marginBottom: 6 }}>
+              ⏳ Cierres pendientes de corroborar
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {analisis.declarados.map(c => (
+                <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#78350F' }}>
+                  <span>{c.fecha} · {c.sucursal_nombre ?? '—'} · {c.vendedor_nombre ?? c.bsale_vendedor_id ?? 'Sin nombre'}</span>
+                  <span style={{ fontWeight: 600 }}>{fmt(c.total_declarado)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Detalle cierres con descuadre — por vendedor y por medio */}
+        {analisis.descuadres.length > 0 && (
+          <div style={{ background: '#FEF2F2', borderRadius: 8, padding: '10px 14px', border: '1px solid #FECACA' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#DC2626', marginBottom: 8 }}>
+              ⚠ Descuadres reales — análisis por vendedor y medio
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {analisis.descuadres.map(c => {
+                // Calcular diferencia por medio para este cierre
+                const mediosDiff = MEDIOS_DESGLOSE
+                  .map(m => ({
+                    label: m.label,
+                    decl:   Number(c[m.key]              ?? 0),
+                    corrob: Number(c[`${m.key}_corrob`]  ?? 0),
+                    diff:   Number(c[`${m.key}_corrob`]  ?? 0) - Number(c[m.key] ?? 0),
+                  }))
+                  .filter(m => m.diff !== 0 && (m.decl > 0 || m.corrob > 0))
+                  .sort((a, b) => a.diff - b.diff)
+
+                const causaMedio = mediosDiff[0]
+                const causaTexto = causaMedio
+                  ? causaMedio.diff < 0
+                    ? `${causaMedio.label} declaró ${fmt(causaMedio.decl)} pero se contaron ${fmt(causaMedio.corrob)} (faltan ${fmt(Math.abs(causaMedio.diff))})`
+                    : `${causaMedio.label} declaró ${fmt(causaMedio.decl)} pero se contaron ${fmt(causaMedio.corrob)} (sobran ${fmt(causaMedio.diff)})`
+                  : 'Sin detalle por medio disponible'
+
+                return (
+                  <div key={c.id} style={{ background: '#fff', borderRadius: 6, padding: '10px 12px', border: '1px solid #FECACA' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                      <div>
+                        <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>
+                          {c.vendedor_nombre ?? c.bsale_vendedor_id ?? 'Sin nombre'}
+                        </span>
+                        <span style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 8 }}>
+                          {c.fecha} · {c.sucursal_nombre ?? '—'}
+                        </span>
+                      </div>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: '#DC2626' }}>
+                        {Number(c.diferencia ?? 0) >= 0 ? '+' : ''}{fmt(c.diferencia)}
+                      </span>
+                    </div>
+                    {/* Causa principal */}
+                    <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 6 }}>
+                      <span style={{ fontWeight: 600 }}>Causa principal: </span>{causaTexto}
+                    </div>
+                    {/* Medios con diferencia */}
+                    {mediosDiff.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {mediosDiff.map(m => (
+                          <div key={m.label} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr 80px', gap: 6, fontSize: 11, alignItems: 'center' }}>
+                            <span style={{ color: '#374151', fontWeight: 500 }}>{m.label}</span>
+                            <span style={{ color: '#6B7280' }}>Declaró: {fmt(m.decl)}</span>
+                            <span style={{ color: '#6B7280' }}>Contó: {fmt(m.corrob)}</span>
+                            <span style={{ fontWeight: 700, color: m.diff < 0 ? '#DC2626' : '#16A34A', textAlign: 'right' }}>
+                              {m.diff >= 0 ? '+' : ''}{fmt(m.diff)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Análisis por medio: qué medio acumula más diferencia en el mes */}
+        {(() => {
+          const mediosMes = MEDIOS_DESGLOSE.map(m => {
+            const decl   = cierres.reduce((s, c) => s + Number(c[m.key]             ?? 0), 0)
+            const corrob = cierres.reduce((s, c) => s + Number(c[`${m.key}_corrob`] ?? 0), 0)
+            const diff   = corrob - decl
+            return { ...m, decl, corrob, diff }
+          }).filter(m => m.diff !== 0 && Math.abs(m.diff) > 10000)
+            .sort((a, b) => a.diff - b.diff)
+
+          if (!mediosMes.length) return null
+          return (
+            <div style={{ background: '#F5F3FF', borderRadius: 8, padding: '10px 14px', border: '1px solid #DDD6FE' }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#5B21B6', marginBottom: 8 }}>
+                💳 Diferencias acumuladas por medio de pago
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {mediosMes.map(m => {
+                  const pctCorr = m.decl > 0 ? Math.round((m.corrob / m.decl) * 100) : 0
+                  const causa = m.diff < 0
+                    ? pctCorr < 50
+                      ? 'Mayoría de cierres de este medio sin corroborar'
+                      : 'Diferencias en corroboración'
+                    : 'Corroborado supera lo declarado — revisar'
+                  return (
+                    <div key={m.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: m.color, flexShrink: 0 }} />
+                        <span style={{ fontWeight: 500, color: '#374151' }}>{m.label}</span>
+                        <span style={{ fontSize: 10, color: '#9CA3AF' }}>{causa}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                        <span style={{ color: '#6B7280', fontSize: 11 }}>{pctCorr}% corroborado</span>
+                        <span style={{ fontWeight: 700, color: m.diff < 0 ? '#DC2626' : '#16A34A', minWidth: 90, textAlign: 'right' }}>
+                          {m.diff >= 0 ? '+' : ''}{fmt(m.diff)}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
+
+      </div>
+    </div>
+  )
+}
+
+// PanelCxcMes usa venta_bsale_api de los cierres cuando ventas_bsale no tiene el mes
+function PanelCxcMes({ cuad, cierres }) {
+  const [open, setOpen] = useState(false)
+
+  // Fuente primaria: vista v_cuadratura_mensual
+  // Fallback: calcular desde cierres directamente (cuando ventas_bsale no tiene el mes)
+  const datos = useMemo(() => {
+    const ventaVista = Number(cuad?.venta_facturada ?? 0)
+    const cajaVista  = Number(cuad?.caja_declarada  ?? 0)
+
+    // Si la vista tiene venta = 0 pero hay cierres con venta_bsale_api, usar esos
+    const ventaCierres = cierres
+      .filter(c => c.estado !== 'anulado' && c.venta_bsale_api != null)
+      .reduce((s, c) => s + Number(c.venta_bsale_api ?? 0), 0)
+    const cajaCierres = cierres
+      .filter(c => c.estado !== 'anulado')
+      .reduce((s, c) => s + Number(c.total_declarado ?? 0), 0)
+
+    const usarFallback = ventaVista === 0 && ventaCierres > 0
+
+    const venta      = usarFallback ? ventaCierres : ventaVista
+    const caja       = usarFallback ? cajaCierres  : cajaVista
+    const abonosRec  = Number(cuad?.abonos_recibidos   ?? 0)
+    const ventasImp  = Number(cuad?.ventas_imputadas   ?? 0)
+    const deltaCxc   = abonosRec - ventasImp
+    const brechaReal = venta - caja - deltaCxc
+    const cuadra     = Math.abs(brechaReal) < 1000
+
+    return { venta, caja, abonosRec, ventasImp, deltaCxc, brechaReal, cuadra, usarFallback }
+  }, [cuad, cierres])
+
+  if (!datos.venta && !datos.caja) return null
+
+  return (
+    <div style={{ ...cardSt, padding: 0, overflow: 'hidden' }}>
+      <button onClick={() => setOpen(v => !v)}
+        style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center',
+          padding: '14px 16px', background: 'none', border: 'none', cursor: 'pointer',
+          borderBottom: open ? '1px solid #F3F4F6' : 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>Cuadratura Venta vs Caja</span>
+          <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
+            background: datos.cuadra ? '#DCFCE7' : '#FEF3C7',
+            color:      datos.cuadra ? '#16A34A' : '#D97706' }}>
+            {datos.cuadra ? '✓ Cuadra contablemente' : '⚠ Brecha real pendiente'}
+          </span>
+          {datos.usarFallback && (
+            <span style={{ fontSize: 10, color: '#9CA3AF', background: '#F3F4F6', padding: '1px 6px', borderRadius: 4 }}>
+              Venta desde cierres · sync BSALE pendiente
+            </span>
+          )}
+        </div>
+        {open ? <ChevronUp size={16} color="#6B7280" /> : <ChevronDown size={16} color="#6B7280" />}
+      </button>
+      {open && (
+        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ background: '#F8FAFC', borderRadius: 8, padding: '14px 16px' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Identidad contable del mes
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr auto 1fr', gap: 8, alignItems: 'center', textAlign: 'center' }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#1F4E79' }}>{fmt(datos.venta)}</div>
+                <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>
+                  {datos.usarFallback ? 'Venta BSALE (cierres)' : 'Venta facturada'}
+                </div>
+              </div>
+              <div style={{ fontSize: 18, color: '#9CA3AF' }}>=</div>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#16A34A' }}>{fmt(datos.caja)}</div>
+                <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>Caja declarada</div>
+              </div>
+              <div style={{ fontSize: 18, color: '#9CA3AF' }}>+</div>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: Math.abs(datos.deltaCxc) < 1000 ? '#374151' : '#D97706' }}>
+                  {datos.deltaCxc >= 0 ? '+' : ''}{fmt(datos.deltaCxc)}
+                </div>
+                <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>Δ CxC</div>
+              </div>
+            </div>
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: '#6B7280' }}>Brecha real (debería ser ~0)</span>
+              <span style={{ fontWeight: 700, fontSize: 14,
+                color: Math.abs(datos.brechaReal) < 1000 ? '#16A34A' : Math.abs(datos.brechaReal) < 50000 ? '#D97706' : '#DC2626' }}>
+                {datos.brechaReal >= 0 ? '+' : ''}{fmt(datos.brechaReal)}{Math.abs(datos.brechaReal) < 1000 ? ' ✓' : ''}
+              </span>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ background: '#EFF6FF', borderRadius: 8, padding: '12px 14px', border: '1px solid #BFDBFE' }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: '#1E40AF', textTransform: 'uppercase', marginBottom: 6 }}>Abonos recibidos</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#1E40AF' }}>{fmt(datos.abonosRec)}</div>
+              <div style={{ fontSize: 11, color: '#6B7280', marginTop: 4 }}>Entró a caja, no es venta</div>
+            </div>
+            <div style={{ background: '#FFF7ED', borderRadius: 8, padding: '12px 14px', border: '1px solid #FED7AA' }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: '#C2410C', textTransform: 'uppercase', marginBottom: 6 }}>Ventas imputadas</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#C2410C' }}>{fmt(datos.ventasImp)}</div>
+              <div style={{ fontSize: 11, color: '#6B7280', marginTop: 4 }}>Venta sin caja física</div>
+            </div>
+          </div>
+          <div style={{ background: '#F9FAFB', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#6B7280', display: 'flex', gap: 8 }}>
+            <Info size={14} style={{ flexShrink: 0, marginTop: 1, color: '#9CA3AF' }} />
+            <span>
+              <strong>Δ CxC = {fmt(datos.abonosRec)} − {fmt(datos.ventasImp)} = {datos.deltaCxc >= 0 ? '+' : ''}{fmt(datos.deltaCxc)}.</strong>{' '}
+              {datos.deltaCxc > 0 ? 'Los clientes abonaron más de lo que compraron. Saldo CxC aumentó.' : datos.deltaCxc < 0 ? 'Los clientes compraron más de lo que abonaron. Saldo CxC bajó.' : 'Abonos y ventas compensados.'}
+              {' '}Ver saldo acumulado en la pestaña "CxC".
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function CuadraturaTab({ usuario }) {
+  const now = new Date()
+  const [anio, setAnio]     = useState(now.getFullYear())
+  const [mes, setMes]       = useState(now.getMonth() + 1)
+  const puedeElegirSuc      = PUEDE_TODO.includes(usuario.rol)
+  const [sucursales, setSucursales] = useState([])
+  const [sucursal, setSucursal]     = useState(puedeElegirSuc ? 'all' : (usuario.sucursal_id ?? ''))
+  const [cierres, setCierres]       = useState([])
+  const [kpis, setKpis]             = useState(null)
+  const [cuadratura, setCuadratura] = useState(null)
+  const [loadingCierres, setLoadingCierres] = useState(true)
+  const [loadingKpis, setLoadingKpis]       = useState(true)
+  const [loadingCuad, setLoadingCuad]       = useState(false)
+
+  const sucursalEf = sucursal === 'all' ? null : sucursal || null
+  const desde = `${anio}-${String(mes).padStart(2,'0')}-01`
+  const fin   = new Date(anio, mes, 0)
+  const hasta = `${anio}-${String(mes).padStart(2,'0')}-${String(fin.getDate()).padStart(2,'0')}`
+  const anios = [now.getFullYear()-1, now.getFullYear(), now.getFullYear()+1]
+
+  useEffect(() => { fetchSucursales().then(setSucursales).catch(() => {}) }, [])
+  useEffect(() => {
+    setLoadingCierres(true)
+    fetchCierres({ sucursal_id: sucursalEf, fecha_desde: desde, fecha_hasta: hasta })
+      .then(setCierres).catch(e => toast.error(e.message)).finally(() => setLoadingCierres(false))
+  }, [sucursalEf, desde, hasta])
+  useEffect(() => {
+    setLoadingKpis(true)
+    fetchKpisMes({ anio, mes, sucursal_id: sucursalEf })
+      .then(setKpis).catch(() => setKpis(null)).finally(() => setLoadingKpis(false))
+  }, [anio, mes, sucursalEf])
+  useEffect(() => {
+    setLoadingCuad(true)
+    fetchCuadraturasMes({ anio, mes, sucursal_id: sucursalEf })
+      .then(rows => {
+        if (!rows.length) { setCuadratura(null); return }
+        const agg = rows.reduce((acc, r) => ({
+          venta_facturada:    (acc.venta_facturada??0)    + Number(r.venta_facturada??0),
+          caja_declarada:     (acc.caja_declarada??0)     + Number(r.caja_declarada??0),
+          caja_corroborada:   (acc.caja_corroborada??0)   + Number(r.caja_corroborada??0),
+          delta_cxc:          (acc.delta_cxc??0)          + Number(r.delta_cxc??0),
+          abonos_recibidos:   (acc.abonos_recibidos??0)   + Number(r.abonos_recibidos??0),
+          ventas_imputadas:   (acc.ventas_imputadas??0)   + Number(r.ventas_imputadas??0),
+          brecha_real:        (acc.brecha_real??0)        + Number(r.brecha_real??0),
+          n_abonos:           (acc.n_abonos??0)           + Number(r.n_abonos??0),
+          n_ventas_imputadas: (acc.n_ventas_imputadas??0) + Number(r.n_ventas_imputadas??0),
+          n_cierres:          (acc.n_cierres??0)          + Number(r.n_cierres??0),
+          n_descuadre:        (acc.n_descuadre??0)        + Number(r.n_descuadre??0),
+        }), {})
+        agg.cuadra_contable = Math.abs(agg.brecha_real) < 1000
+        setCuadratura(agg)
+      })
+      .catch(() => setCuadratura(null))
+      .finally(() => setLoadingCuad(false))
+  }, [anio, mes, sucursalEf])
+
+  function exportarCSV() {
+    const h = ['fecha','sucursal','vendedor','bsale_api','declarado','brecha_bsale','corroborado','diferencia','estado']
+    const r = cierres.map(c => [c.fecha,c.sucursal_nombre??'',c.vendedor_nombre??'',c.venta_bsale_api??'',c.total_declarado??'',c.brecha_bsale??'',c.total_corroborado??'',c.diferencia??'',c.estado])
+    const csv = [h,...r].map(row => row.map(v => { const s=String(v??''); return /[",\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s }).join(',')).join('\n')
+    const a = Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([csv],{type:'text/csv'})),download:`cuadratura_${anio}-${String(mes).padStart(2,'0')}.csv`})
+    a.click()
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={cardSt}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, alignItems: 'flex-end' }}>
+          <div><label style={labelSt}>Año</label>
+            <select style={selectSt} value={String(anio)} onChange={e => setAnio(Number(e.target.value))}>
+              {anios.map(a => <option key={a} value={String(a)}>{a}</option>)}
+            </select></div>
+          <div><label style={labelSt}>Mes</label>
+            <select style={selectSt} value={String(mes)} onChange={e => setMes(Number(e.target.value))}>
+              {MESES.map((m,i) => <option key={i+1} value={String(i+1)}>{m}</option>)}
+            </select></div>
+          <div><label style={labelSt}>Sucursal</label>
+            <select style={selectSt} value={sucursal} disabled={!puedeElegirSuc} onChange={e => setSucursal(e.target.value)}>
+              {puedeElegirSuc && <option value="all">Todas</option>}
+              {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select></div>
+          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+            <button onClick={exportarCSV} disabled={!cierres.length} style={{ ...btnOutlineSt, width: '100%', justifyContent: 'center', opacity: cierres.length ? 1 : 0.5 }}>
+              <Download size={13} /> CSV
+            </button></div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+        <KpiCard title="Ventas BSALE mes"     value={loadingKpis ? '…' : fmt(kpis?.ventasBsale)} color="#1F4E79" />
+        <KpiCard title="Caja declarada"        value={loadingCuad ? '…' : fmt(cuadratura?.caja_declarada)} color="#16A34A" />
+        <KpiCard title="Abonos recibidos"      value={loadingCuad ? '…' : fmt(cuadratura?.abonos_recibidos)} color="#1E40AF" sub="entraron a caja, no son venta" />
+        <KpiCard title="Ventas imputadas"      value={loadingCuad ? '…' : fmt(cuadratura?.ventas_imputadas)} color="#C2410C" sub="ventas sin caja física" />
+        <KpiCard title="Pend. corroborar"      value={loadingKpis ? '…' : String(kpis?.pendientes ?? 0)} color="#D97706" />
+        <KpiCard title="Descuadres"            value={loadingKpis ? '…' : String(kpis?.descuadres ?? 0)} color={(kpis?.descuadres??0)>0 ? '#DC2626' : '#111827'} />
+      </div>
+
+      <InformativoDiferencias cierres={cierres} loadingCierres={loadingCierres} />
+
+      <PanelCxcMes cuad={cuadratura} cierres={cierres} />
+
+      <PanelMediosPago cierres={cierres} />
+
+      <div style={{ ...cardSt, padding: 0, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid #F3F4F6', fontSize: 14, fontWeight: 600 }}>
+          Detalle del mes — {MESES[mes-1]} {anio}
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr>
+              {['Fecha','Sucursal','Vendedor','Venta BSALE','Caja física','Brecha','Corroborado','Diferencia','Estado'].map(h => (
+                <th key={h} style={{ ...TH, textAlign: ['Venta BSALE','Caja física','Brecha','Corroborado','Diferencia'].includes(h) ? 'right' : 'left' }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {loadingCierres && <tr><td colSpan={9} style={{ ...TD, textAlign: 'center', padding: '40px 0' }}><Loader2 size={20} style={{ display:'inline-block',color:'#9CA3AF' }} /></td></tr>}
+              {!loadingCierres && !cierres.length && <tr><td colSpan={9} style={{ ...TD, textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>Sin cierres en este filtro</td></tr>}
+              {!loadingCierres && cierres.map(c => {
+                const difColor = c.diferencia == null ? '#374151' : Math.abs(Number(c.diferencia))===0 ? '#16A34A' : '#DC2626'
+                const abCli = Number(c.abono_cliente ?? 0)
+                const cajaFisica = c.venta_bsale_api != null ? Number(c.venta_bsale_api) - abCli : null
+                return (
+                  <tr key={c.id} style={{ borderTop: '1px solid #F3F4F6' }}
+                    onMouseEnter={e => e.currentTarget.style.background='#F9FAFB'}
+                    onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                    <td style={TD}>{c.fecha}</td>
+                    <td style={TD}>{c.sucursal_nombre ?? '—'}</td>
+                    <td style={TD}>{c.vendedor_nombre ?? '—'}</td>
+                    <td style={{ ...TD, textAlign: 'right' }}>{c.venta_bsale_api==null ? '—' : fmt(c.venta_bsale_api)}</td>
+                    <td style={{ ...TD, textAlign: 'right', fontWeight: 600 }}>
+                      {cajaFisica==null ? '—' : fmt(cajaFisica)}
+                      {abCli > 0 && <span title={`${fmt(abCli)} de abono cliente — no entra a caja`}
+                        style={{ marginLeft: 4, fontSize: 9, color: '#C2410C', background: '#FFF7ED', padding: '1px 4px', borderRadius: 3 }}>AC</span>}
+                    </td>
+                    <td style={{ ...TD, textAlign: 'right' }}>{fmt(c.brecha_bsale)}</td>
+                    <td style={{ ...TD, textAlign: 'right' }}>{c.total_corroborado==null ? '—' : fmt(c.total_corroborado)}</td>
+                    <td style={{ ...TD, textAlign: 'right', fontWeight: 600, color: difColor }}>{c.diferencia==null ? '—' : fmt(c.diferencia)}</td>
+                    <td style={TD}>{estadoBadge(c.estado)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
