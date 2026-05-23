@@ -20,7 +20,7 @@ const rl = u => ROLES.find(r => r.k === u?.rol) || ROLES[5]
 const APPS_CATALOG = {
   compras:   { l: "ERP Compras",        desc: "Gestión de órdenes de compra, proveedores y logística", ic: "📦", c: "#007AFF", tabs: ["Monitor","Órdenes","Reposición","Forecast","Tránsito"] },
   finanzas:  { l: "Sistema Financiero", desc: "Tesorería, conciliación, presupuesto y reportes",       ic: "💰", c: "#34C759", tabs: ["Dashboard","Conciliación","Tesorería","Presupuesto"] },
-  admin:     { l: "Administración",     desc: "Usuarios, matriz de acceso — en construcción",         ic: "🔑", c: "#1C1C1E", tabs: ["Próximamente"], soon: true },
+  admin:     { l: "Administración",     desc: "Usuarios, matriz de acceso y gestión del ERP",          ic: "🔑", c: "#1C1C1E", tabs: ["Usuarios","Accesos","Apps","Roles"] },
   logistica: { l: "Logística",          desc: "Despachos, retiros, devoluciones — próximamente",       ic: "🚚", c: "#FF9500", tabs: ["Próximamente"], soon: true },
   postventa: { l: "Postventa",          desc: "Reclamos, NC, casos de cliente — próximamente",         ic: "🛠", c: "#AF52DE", tabs: ["Próximamente"], soon: true },
   rrhh:      { l: "Gestión de Personas",desc: "Contratos, dotación, turnos — próximamente",            ic: "👥", c: "#FF3B30", tabs: ["Próximamente"], soon: true },
