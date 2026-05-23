@@ -1,53 +1,112 @@
-import { signOut } from '../supabase'
+import { useState, useEffect } from 'react'
+import { supabase, signOut } from '../supabase'
 
-const ROLES=[
-  {k:"admin",l:"Admin",c:"#FF3B30",p:["todo"]},
-  {k:"dir_general",l:"Dir. General",c:"#FF3B30",p:["aprobar_ilimitado","ver_dash","ver_fin","gest_imp","ver_finanzas_app"]},
-  {k:"dir_finanzas",l:"Dir. Finanzas",c:"#AF52DE",p:["aprobar_fin","ver_dash","ver_fin","reg_pago","ver_finanzas_app"]},
-  {k:"dir_negocios",l:"Dir. Negocios",c:"#007AFF",p:["aprobar_neg","crear_oc","ver_dash","gest_prov","valid_prov"]},
-  {k:"dir_operaciones",l:"Dir. Operaciones",c:"#5AC8FA",p:["aprobar_ops","recibir","ver_dash","seguim","cerrar_oc"]},
-  {k:"analista",l:"Analista",c:"#34C759",p:["crear_oc","ver_dash","cerrar_oc","gest_prov","config","seguim","gest_imp"]},
-  {k:"jefe_bodega",l:"Jefe Bodega",c:"#FF9500",p:["recibir","ver_dash"]},
-  {k:"jefe_operaciones",l:"Jefe Operaciones",c:"#FF9500",p:["recibir","aprobar_ops","ver_dash","seguim"]},
-  {k:"directorio",l:"Directorio",c:"#8E8E93",p:["ver_dash","ver_fin"]}
+/* ═══ ROLES legados (fallback si usuario_acceso no tiene registros) ═══ */
+const ROLES = [
+  { k: "admin",            l: "Admin",             c: "#FF3B30" },
+  { k: "dir_general",      l: "Dir. General",      c: "#FF3B30" },
+  { k: "dir_finanzas",     l: "Dir. Finanzas",     c: "#AF52DE" },
+  { k: "dir_negocios",     l: "Dir. Negocios",     c: "#007AFF" },
+  { k: "dir_operaciones",  l: "Dir. Operaciones",  c: "#5AC8FA" },
+  { k: "analista",         l: "Analista",          c: "#34C759" },
+  { k: "jefe_bodega",      l: "Jefe Bodega",       c: "#FF9500" },
+  { k: "jefe_operaciones", l: "Jefe Operaciones",  c: "#FF9500" },
+  { k: "directorio",       l: "Directorio",        c: "#8E8E93" },
+  { k: "cajero",           l: "Cajero/Vendedor",   c: "#34C759" }
 ]
 const rl = u => ROLES.find(r => r.k === u?.rol) || ROLES[5]
-const hp = (u, p) => { if(!u) return false; if(u.rol==="admin") return true; const r=rl(u); return r.p.includes("todo")||r.p.includes(p) }
+
+/* ═══ Catálogo de apps disponibles (espejo de tabla apps en Supabase) ═══ */
+const APPS_CATALOG = {
+  compras:   { l: "ERP Compras",        desc: "Gestión de órdenes de compra, proveedores y logística", ic: "📦", c: "#007AFF", tabs: ["Monitor","Órdenes","Reposición","Forecast","Tránsito"] },
+  finanzas:  { l: "Sistema Financiero", desc: "Tesorería, conciliación, presupuesto y reportes",       ic: "💰", c: "#34C759", tabs: ["Dashboard","Conciliación","Tesorería","Presupuesto"] },
+  admin:     { l: "Administración",     desc: "Usuarios, matriz de acceso — en construcción",         ic: "🔑", c: "#1C1C1E", tabs: ["Próximamente"], soon: true },
+  logistica: { l: "Logística",          desc: "Despachos, retiros, devoluciones — próximamente",       ic: "🚚", c: "#FF9500", tabs: ["Próximamente"], soon: true },
+  postventa: { l: "Postventa",          desc: "Reclamos, NC, casos de cliente — próximamente",         ic: "🛠", c: "#AF52DE", tabs: ["Próximamente"], soon: true },
+  rrhh:      { l: "Gestión de Personas",desc: "Contratos, dotación, turnos — próximamente",            ic: "👥", c: "#FF3B30", tabs: ["Próximamente"], soon: true },
+  comercial: { l: "Comercial",          desc: "Ventas, vendedores, comisiones — próximamente",          ic: "📈", c: "#5856D6", tabs: ["Próximamente"], soon: true }
+}
+
+/* ═══ Fallback legado: si no hay matriz, qué apps mostrar según usuarios.rol ═══ */
+function appsLegado(rol) {
+  if (rol === "admin" || rol === "dir_general") return ["compras","finanzas","admin"]
+  if (rol === "dir_finanzas") return ["compras","finanzas"]
+  if (rol === "cajero") return ["finanzas"]
+  return ["compras"]
+}
 
 /* ═══ APP HUB — Selector de aplicación post-login ═══ */
-export function AppHub({ cu, onSelect }) {
+export function AppHub({ cu, onSelect, onLogout }) {
   const r = rl(cu)
-  const verCompras = true // todos los roles pueden ver el ERP
-  const verFinanzas = hp(cu, "ver_finanzas_app") || cu.rol === "admin"
+  const [appsDisp, setAppsDisp] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const apps = [
-    {
-      k: "compras",
-      l: "ERP Compras",
-      desc: "Gestión de órdenes de compra, proveedores y logística",
-      ic: "📦",
-      c: "#007AFF",
-      bg: "#007AFF",
-      visible: verCompras,
-      tabs: ["Monitor", "Órdenes", "Reposición", "Forecast", "Tránsito"]
-    },
-    {
-      k: "finanzas",
-      l: "Sistema Financiero",
-      desc: "Tesorería, conciliación, presupuesto y reportes",
-      ic: "💰",
-      c: "#34C759",
-      bg: "#34C759",
-      visible: verFinanzas,
-      tabs: ["Dashboard", "Conciliación", "Tesorería", "Presupuesto"]
+  // Carga apps disponibles desde la matriz (con fallback legado)
+  useEffect(() => {
+    let cancel = false
+    const cargar = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('usuario_acceso')
+          .select('app_codigo, apps(activa)')
+          .eq('usuario_id', cu.id)
+          .eq('activo', true)
+
+        if (cancel) return
+
+        if (error || !data || data.length === 0) {
+          // Fallback: usa el rol legado
+          setAppsDisp(appsLegado(cu.rol))
+        } else {
+          // Solo apps activas
+          const codigos = data.filter(a => a.apps?.activa).map(a => a.app_codigo)
+          if (codigos.length === 0) setAppsDisp(appsLegado(cu.rol))
+          else setAppsDisp(codigos)
+        }
+      } catch (e) {
+        if (!cancel) setAppsDisp(appsLegado(cu.rol))
+      } finally {
+        if (!cancel) setLoading(false)
+      }
     }
-  ].filter(a => a.visible)
+    cargar()
+    return () => { cancel = true }
+  }, [cu.id, cu.rol])
 
-  // Auto-seleccionar si solo hay 1 app disponible
-  if (apps.length === 1) {
-    onSelect(apps[0].k)
-    return null
+  // Auto-seleccionar si solo hay 1 app
+  useEffect(() => {
+    if (!loading && appsDisp.length === 1) {
+      const codigo = appsDisp[0]
+      const app = APPS_CATALOG[codigo]
+      if (app && !app.soon) onSelect(codigo)
+    }
+  }, [loading, appsDisp, onSelect])
+
+  // Logout: usa onLogout si viene como prop, sino fallback al comportamiento histórico
+  const handleLogout = async () => {
+    if (typeof onLogout === 'function') {
+      onLogout()
+      return
+    }
+    try { await signOut() } catch (e) {}
+    try { localStorage.removeItem("erp_cu_id") } catch (e) {}
+    try { localStorage.removeItem("outlet_app_actual") } catch (e) {}
+    window.location.reload()
   }
+
+  // Loading state
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #F2F2F7 0%, #E5E5EA 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🏢</div>
+          <div style={{ fontSize: 14, color: "#8E8E93" }}>Cargando aplicaciones...</div>
+        </div>
+      </div>
+    )
+  }
+
+  const apps = appsDisp.map(k => ({ k, ...APPS_CATALOG[k] })).filter(a => a.l)
 
   return (
     <div style={{
@@ -78,32 +137,34 @@ export function AppHub({ cu, onSelect }) {
         display: "grid",
         gridTemplateColumns: apps.length === 1 ? "1fr" : "repeat(auto-fit, minmax(280px, 360px))",
         gap: 20,
-        maxWidth: 800,
+        maxWidth: 1100,
         width: "100%"
       }}>
         {apps.map(app => (
           <button
             key={app.k}
-            onClick={() => onSelect(app.k)}
+            disabled={app.soon}
+            onClick={() => !app.soon && onSelect(app.k)}
             style={{
               background: "#fff",
               border: "1px solid rgba(0,0,0,0.06)",
               borderRadius: 20,
               padding: "32px 24px",
-              cursor: "pointer",
+              cursor: app.soon ? "default" : "pointer",
               textAlign: "left",
               transition: "transform 0.2s, box-shadow 0.2s",
               boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
               display: "flex",
               flexDirection: "column",
-              gap: 12
+              gap: 12,
+              opacity: app.soon ? 0.55 : 1
             }}
-            onMouseOver={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.12)" }}
+            onMouseOver={e => { if (!app.soon) { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.12)" } }}
             onMouseOut={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)" }}
           >
             <div style={{
               width: 56, height: 56, borderRadius: 14,
-              background: app.bg + "15",
+              background: app.c + "15",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 28
             }}>{app.ic}</div>
@@ -122,7 +183,7 @@ export function AppHub({ cu, onSelect }) {
                 <span key={t} style={{
                   fontSize: 11, fontWeight: 600,
                   padding: "3px 9px", borderRadius: 100,
-                  background: app.bg + "10", color: app.c
+                  background: app.c + "10", color: app.c
                 }}>{t}</span>
               ))}
             </div>
@@ -131,9 +192,9 @@ export function AppHub({ cu, onSelect }) {
               marginTop: 8, paddingTop: 12,
               borderTop: "1px solid #F2F2F7",
               display: "flex", justifyContent: "space-between", alignItems: "center",
-              fontSize: 13, fontWeight: 600, color: app.c
+              fontSize: 13, fontWeight: 600, color: app.soon ? "#8E8E93" : app.c
             }}>
-              Ingresar →
+              {app.soon ? "Próximamente" : "Ingresar →"}
             </div>
           </button>
         ))}
@@ -141,12 +202,7 @@ export function AppHub({ cu, onSelect }) {
 
       {/* Logout */}
       <button
-        onClick={async () => {
-          try { await signOut() } catch (e) { }
-          localStorage.removeItem("erp_cu_id")
-          localStorage.removeItem("outlet_app_actual")
-          window.location.reload()
-        }}
+        onClick={handleLogout}
         style={{
           marginTop: 32,
           padding: "10px 20px",

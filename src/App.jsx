@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTablePlugin from 'jspdf-autotable'
 import{FinanzasApp}from'./finanzas/FinanzasApp'
+import{AppHub}from'./finanzas/AppHub'
 
 /* ═══ HELPERS ═══ */
 const fmt=n=>new Intl.NumberFormat("es-CL",{style:"currency",currency:"CLP",maximumFractionDigits:0}).format(n||0)
@@ -385,6 +386,8 @@ export default function App(){
 
   if(!cu)return<LoginScreen onLogin={setCu} users={users}/>
 
+  if(cu&&!appActual)return<AppHub cu={cu} onSelect={v=>{setAppActual(v);try{localStorage.setItem("outlet_app_actual",v)}catch(e){}}} onLogout={async()=>{try{await signOut()}catch(e){}try{localStorage.removeItem("erp_cu_id")}catch(e){}try{localStorage.removeItem("outlet_app_actual")}catch(e){}setCu(null);setAppActual(null)}}/>
+
   if(appActual==="finanzas")return<FinanzasApp cu={cu} setAppActual={v=>{setAppActual(v);try{if(v)localStorage.setItem("outlet_app_actual",v);else localStorage.removeItem("outlet_app_actual")}catch(e){}}}/>
 
   const rd=rl(cu)
@@ -428,7 +431,7 @@ export default function App(){
             <span style={{fontSize:14,lineHeight:1}}>📖</span>
             <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.02em"}}>Manual</span>
           </a>}
-          <button onClick={()=>{setAppActual("finanzas");try{localStorage.setItem("outlet_app_actual","finanzas")}catch(e){}}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,padding:isMobile?"6px 8px":"6px 10px",borderRadius:10,background:"#AF52DE15",border:"none",cursor:"pointer",color:"#AF52DE",minWidth:isMobile?42:56}} title="Sistema Financiero"><span style={{fontSize:isMobile?13:14,lineHeight:1}}>⇄</span><span style={{fontSize:9,fontWeight:700,letterSpacing:"0.02em"}}>Apps</span></button>
+          <button onClick={()=>{setAppActual(null);try{localStorage.removeItem("outlet_app_actual")}catch(e){}}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,padding:isMobile?"6px 8px":"6px 10px",borderRadius:10,background:"#AF52DE15",border:"none",cursor:"pointer",color:"#AF52DE",minWidth:isMobile?42:56}} title="Cambiar de aplicación"><span style={{fontSize:isMobile?13:14,lineHeight:1}}>⊞</span><span style={{fontSize:9,fontWeight:700,letterSpacing:"0.02em"}}>Apps</span></button>
           <button onClick={async()=>{try{await signOut()}catch(e){}localStorage.removeItem("erp_cu_id");setCu(null)}} style={{width:isMobile?34:36,height:isMobile?34:36,borderRadius:10,background:"#FF3B3015",border:"none",cursor:"pointer",fontSize:13,color:"#FF3B30"}} title="Cerrar sesión">⏻</button>
         </div>
       </div>
