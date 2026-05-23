@@ -190,15 +190,14 @@ function LoginScreen({onLogin,users}){
 
   const authLogin=async()=>{
     setLoading(true);setErr("")
-    // First try Supabase Auth
     const{data,error}=await signIn(email,pass)
     if(error){
-      // Fallback: match by email in usuarios table (for users without Supabase Auth)
-      const u=users.find(x=>x.correo===email)
-      if(u){onLogin(u);return}
-      setErr(error.message);setLoading(false);return
+      const msg=error.message?.includes("Invalid login")||error.message?.includes("invalid_credentials")
+        ?"Correo o contrasena incorrectos. Usa el link Olvide mi contrasena si es tu primer acceso."
+        :error.message
+      setErr(msg);setLoading(false);return
     }
-    const u=users.find(x=>x.correo===email)
+    const u=users.find(x=>x.correo?.toLowerCase()===email.toLowerCase())
     if(u){onLogin(u)}else{setErr("Usuario no registrado en el sistema. Contacta al administrador.");setLoading(false)}
   }
 
@@ -315,24 +314,17 @@ export default function App(){
 
   useEffect(()=>{loadAll()},[])
 
-  // ⭐ v48: Persistencia de sesión — restaura el usuario al recargar (F5)
-  // 1) Intenta con Supabase Auth (si el usuario se logueó con supabase.auth)
-  // 2) Fallback: restaura desde localStorage si hay un usuario cacheado
+  // Persistencia de sesion via Supabase Auth (unico metodo valido desde v52)
   useEffect(()=>{
     const restoreSession=async()=>{
       try{
-        // Primero: intentar Supabase Auth
         const s=await getSession()
         if(s?.user?.email&&users.length>0){
           const u=users.find(x=>x.correo?.toLowerCase()===s.user.email.toLowerCase())
           if(u){setCu(u);return}
         }
-        // Fallback: usuario cacheado en localStorage
-        const cachedId=localStorage.getItem("erp_cu_id")
-        if(cachedId&&users.length>0){
-          const u=users.find(x=>x.id===cachedId&&x.activo)
-          if(u)setCu(u)
-        }
+        // Limpiar cache legacy si existe
+        try{localStorage.removeItem("erp_cu_id")}catch(e){}
       }catch(e){console.warn("restoreSession:",e)}
     }
     if(users.length>0&&!cu)restoreSession()
@@ -344,13 +336,6 @@ export default function App(){
     return()=>{authListener?.subscription?.unsubscribe()}
   },[users])
 
-  // ⭐ v48: Guardar id del usuario en localStorage cada vez que cambia (para fallback)
-  useEffect(()=>{
-    try{
-      if(cu?.id)localStorage.setItem("erp_cu_id",cu.id)
-      else localStorage.removeItem("erp_cu_id")
-    }catch(e){}
-  },[cu])
 
   const loadAll=async()=>{
     try{
