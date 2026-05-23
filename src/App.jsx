@@ -133,6 +133,51 @@ const Stp=({steps,cur})=><div style={{display:"flex",alignItems:"flex-start",mar
 const Sheet=({show,onClose,title,children})=>{if(!show)return null;return<div style={css.modal} onClick={onClose}><div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:"20px 20px 0 0",padding:"8px 20px 32px",width:"100%",maxWidth:680,maxHeight:"92vh",overflow:"auto",animation:"slideUp 0.3s ease"}}><div style={{width:36,height:4,borderRadius:2,background:"#E5E5EA",margin:"0 auto 12px"}}/><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:18,fontWeight:700,letterSpacing:"-0.02em"}}>{title}</div><button onClick={onClose} style={{width:30,height:30,borderRadius:15,background:"#F2F2F7",border:"none",fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#8E8E93"}}>✕</button></div>{children}</div></div>}
 
 /* ═══ LOGIN SCREEN — Email + Password only ═══ */
+/* \u2550\u2550\u2550 CAMBIAR PASSWORD SCREEN \u2014 Se muestra cuando el usuario llega desde un link de recovery \u2550\u2550\u2550 */
+/* ═══ CAMBIAR PASSWORD SCREEN — Aparece cuando el usuario llega desde link de recovery ═══ */
+function CambiarPasswordScreen({onDone}){
+  const[pass,setPass]=useState("")
+  const[pass2,setPass2]=useState("")
+  const[loading,setLoading]=useState(false)
+  const[err,setErr]=useState("")
+  const[ok,setOk]=useState(false)
+
+  const guardar=async()=>{
+    if(pass.length<8){setErr("La contrasena debe tener al menos 8 caracteres");return}
+    if(pass!==pass2){setErr("Las contrasenas no coinciden");return}
+    setLoading(true);setErr("")
+    const{error}=await supabase.auth.updateUser({password:pass})
+    setLoading(false)
+    if(error){setErr("Error: "+error.message);return}
+    setOk(true)
+    setTimeout(()=>onDone(),2500)
+  }
+
+  return<div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f3460 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div style={{width:"100%",maxWidth:420}}>
+      <div style={{textAlign:"center",marginBottom:32}}>
+        <div style={{width:60,height:60,borderRadius:16,background:"rgba(255,255,255,0.1)",backdropFilter:"blur(10px)",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:16,border:"1px solid rgba(255,255,255,0.08)"}}><span style={{fontSize:30}}>🔒</span></div>
+        <div style={{fontSize:28,fontWeight:800,color:"#fff",letterSpacing:"-0.03em"}}>Define tu contrasena</div>
+        <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginTop:6}}>Elige una contrasena segura para tu cuenta ERP</div>
+      </div>
+      <div style={{background:"#fff",borderRadius:20,padding:32,boxShadow:"0 25px 60px rgba(0,0,0,0.3)"}}>
+        {ok?<div style={{textAlign:"center",padding:"20px 0"}}>
+          <div style={{fontSize:48,marginBottom:12}}>✅</div>
+          <div style={{fontSize:17,fontWeight:700,color:"#1C1C1E",marginBottom:6}}>Contrasena actualizada</div>
+          <div style={{fontSize:13,color:"#8E8E93"}}>Ingresando al sistema...</div>
+        </div>:<>
+          <div style={{fontSize:13,color:"#8E8E93",marginBottom:16}}>Minimo 8 caracteres. Define una contrasena que recuerdes.</div>
+          <Fl l="Nueva contrasena"><input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder="........" style={{...css.input,padding:"12px 16px",fontSize:15}} autoFocus/></Fl>
+          <Fl l="Confirmar contrasena"><input type="password" value={pass2} onChange={e=>setPass2(e.target.value)} placeholder="........" style={{...css.input,padding:"12px 16px",fontSize:15}} onKeyDown={e=>e.key==="Enter"&&guardar()}/></Fl>
+          {err&&<div style={{color:"#FF3B30",fontSize:13,marginBottom:12,padding:"10px 14px",background:"#FF3B3008",borderRadius:10,border:"1px solid #FF3B3020"}}>{err}</div>}
+          {pass.length>0&&pass2.length>0&&pass===pass2&&<div style={{color:"#34C759",fontSize:12,marginBottom:10,display:"flex",alignItems:"center",gap:4}}><span>OK</span> Las contrasenas coinciden</div>}
+          <Bt v="pri" full dis={!pass||!pass2||loading} onClick={guardar}>{loading?"Guardando...":"Guardar contrasena"}</Bt>
+        </>}
+      </div>
+    </div>
+  </div>
+}
+
 function LoginScreen({onLogin,users}){
   const[email,setEmail]=useState("")
   const[pass,setPass]=useState("")
@@ -245,6 +290,7 @@ export default function App(){
   const[isMobile,setIsMobile]=useState(()=>typeof window!=="undefined"?window.innerWidth<768:false)
   const[moreOpen,setMoreOpen]=useState(false)
   const[appActual,setAppActual]=useState(()=>{try{return localStorage.getItem("outlet_app_actual")||null}catch(e){return null}})
+  const[recoveryMode,setRecoveryMode]=useState(false)
   useEffect(()=>{
     const onResize=()=>setIsMobile(window.innerWidth<768)
     window.addEventListener("resize",onResize)
@@ -292,7 +338,8 @@ export default function App(){
     if(users.length>0&&!cu)restoreSession()
     // Listener de cambios de auth (logout automático si el token expira)
     const{data:authListener}=supabase.auth.onAuthStateChange((event,sess)=>{
-      if(event==="SIGNED_OUT"){setCu(null);localStorage.removeItem("erp_cu_id")}
+      if(event==="SIGNED_OUT"){setCu(null);localStorage.removeItem("erp_cu_id");setRecoveryMode(false)}
+      if(event==="PASSWORD_RECOVERY"){setRecoveryMode(true)}
     })
     return()=>{authListener?.subscription?.unsubscribe()}
   },[users])
@@ -429,6 +476,7 @@ export default function App(){
 
   if(loading)return<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#F2F2F7"}}><div style={{textAlign:"center"}}><div style={{fontSize:32,marginBottom:8}}>📦</div><div style={{fontSize:18,fontWeight:700,color:"#1C1C1E"}}>Outlet de Puertas</div><div style={{fontSize:13,color:"#8E8E93",marginTop:4}}>Conectando...</div></div></div>
 
+  if(recoveryMode)return<CambiarPasswordScreen onDone={()=>setRecoveryMode(false)}/>
   if(!cu)return<LoginScreen onLogin={setCu} users={users}/>
 
   if(cu&&!appActual)return<AppHub cu={cu} onSelect={v=>{setAppActual(v);try{localStorage.setItem("outlet_app_actual",v)}catch(e){}}} onLogout={async()=>{try{await signOut()}catch(e){}try{localStorage.removeItem("erp_cu_id")}catch(e){}try{localStorage.removeItem("outlet_app_actual")}catch(e){}setCu(null);setAppActual(null)}}/>
