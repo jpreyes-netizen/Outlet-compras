@@ -138,6 +138,10 @@ function LoginScreen({onLogin,users}){
   const[pass,setPass]=useState("")
   const[err,setErr]=useState("")
   const[loading,setLoading]=useState(false)
+  const[showReset,setShowReset]=useState(false)
+  const[resetEmail,setResetEmail]=useState("")
+  const[resetMsg,setResetMsg]=useState("")
+  const[resetLoading,setResetLoading]=useState(false)
 
   const authLogin=async()=>{
     setLoading(true);setErr("")
@@ -153,6 +157,45 @@ function LoginScreen({onLogin,users}){
     if(u){onLogin(u)}else{setErr("Usuario no registrado en el sistema. Contacta al administrador.");setLoading(false)}
   }
 
+  const sendReset=async()=>{
+    if(!resetEmail){setResetMsg("Ingresa tu correo corporativo");return}
+    setResetLoading(true);setResetMsg("")
+    const{error}=await supabase.auth.resetPasswordForEmail(resetEmail.toLowerCase().trim(),{
+      redirectTo:"https://outlet-compras.netlify.app"
+    })
+    setResetLoading(false)
+    if(error){setResetMsg("Error: "+error.message)}
+    else{setResetMsg("✓ Revisa tu correo "+resetEmail+". El link expira en 1 hora.")}
+  }
+
+  // Pantalla de reset
+  if(showReset)return<div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f3460 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div style={{width:"100%",maxWidth:420}}>
+      <div style={{textAlign:"center",marginBottom:32}}>
+        <div style={{width:60,height:60,borderRadius:16,background:"rgba(255,255,255,0.1)",backdropFilter:"blur(10px)",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:16,border:"1px solid rgba(255,255,255,0.08)"}}><span style={{fontSize:30}}>🔑</span></div>
+        <div style={{fontSize:28,fontWeight:800,color:"#fff",letterSpacing:"-0.03em"}}>Recuperar acceso</div>
+        <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginTop:6}}>Te enviaremos un link para configurar tu contraseña</div>
+      </div>
+      <div style={{background:"#fff",borderRadius:20,padding:32,boxShadow:"0 25px 60px rgba(0,0,0,0.3)"}}>
+        {!resetMsg?<>
+          <div style={{fontSize:13,color:"#8E8E93",marginBottom:16}}>Ingresa tu correo corporativo y recibirás un email con instrucciones.</div>
+          <Fl l="Correo corporativo"><input type="email" value={resetEmail} onChange={e=>setResetEmail(e.target.value)} placeholder="usuario@outletdepuertas.cl" style={{...css.input,padding:"12px 16px",fontSize:15}} autoFocus onKeyDown={e=>e.key==="Enter"&&sendReset()}/></Fl>
+          <Bt v="pri" full dis={!resetEmail||resetLoading} onClick={sendReset}>{resetLoading?"Enviando...":"Enviar link de recuperación"}</Bt>
+          <button onClick={()=>{setShowReset(false);setResetEmail("");setResetMsg("")}} style={{width:"100%",marginTop:10,padding:"10px",background:"none",border:"none",color:"#8E8E93",fontSize:13,cursor:"pointer"}}>← Volver al login</button>
+        </>:<>
+          <div style={{textAlign:"center",padding:"20px 0"}}>
+            <div style={{fontSize:40,marginBottom:12}}>📧</div>
+            <div style={{fontSize:15,fontWeight:600,color:"#1C1C1E",marginBottom:8}}>Email enviado</div>
+            <div style={{fontSize:13,color:"#8E8E93",lineHeight:1.5,marginBottom:20}}>{resetMsg}</div>
+            <div style={{fontSize:12,color:"#AEAEB2",marginBottom:20}}>Si no ves el email, revisa tu carpeta de spam. El link te lleva al ERP donde podrás definir tu nueva contraseña.</div>
+          </div>
+          <Bt v="gry" full onClick={()=>{setShowReset(false);setResetEmail("");setResetMsg("")}}>← Volver al login</Bt>
+        </>}
+      </div>
+    </div>
+  </div>
+
+  // Pantalla de login normal
   return<div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f3460 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
     <div style={{width:"100%",maxWidth:420}}>
       <div style={{textAlign:"center",marginBottom:32}}>
@@ -168,6 +211,7 @@ function LoginScreen({onLogin,users}){
         <Fl l="Contraseña"><input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder="••••••••" style={{...css.input,padding:"12px 16px",fontSize:15}} onKeyDown={e=>e.key==="Enter"&&authLogin()}/></Fl>
         {err&&<div style={{color:"#FF3B30",fontSize:13,marginBottom:12,padding:"10px 14px",background:"#FF3B3008",borderRadius:10,border:"1px solid #FF3B3020"}}>{err}</div>}
         <Bt v="pri" full dis={!email||!pass||loading} onClick={authLogin}>{loading?"Verificando...":"Ingresar"}</Bt>
+        <button onClick={()=>{setShowReset(true);setResetEmail(email)}} style={{width:"100%",marginTop:12,padding:"8px",background:"none",border:"none",color:"#8E8E93",fontSize:13,cursor:"pointer",textDecoration:"underline"}}>¿Olvidaste tu contraseña?</button>
       </div>
     </div>
   </div>
