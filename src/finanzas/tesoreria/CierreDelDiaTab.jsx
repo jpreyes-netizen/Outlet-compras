@@ -1,704 +1,508 @@
-// CierreDelDiaTab.jsx — Módulo unificado de cierre de caja con BSALE
-// Reemplaza DeclararCierreTab + CorroborarCierresTab
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, X, CheckCircle2, AlertTriangle, AlertCircle, RefreshCw } from 'lucide-react'
+import { Plus, Paperclip, FileCheck, Loader2, Upload } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { supabase } from '../../supabase'
-import { MEDIOS, UMBRALES_DEFAULT, formatCLP, parseCLP, todayISO, inputSt, selectSt, labelSt, cardSt, btnSt, btnOutlineSt, estadoBadge, clasificarPorDiferencia } from './types'
-import { fetchSucursales, fetchUmbrales, fetchCierreDelDia, declararCierre, actualizarDeclaracion, corroborarCierre } from './api'
+import {
+  formatCLP, parseCLP, rangoMes,
+  inputSt, selectSt, labelSt, cardSt, btnSt, btnOutlineSt, TH, TD,
+} from './types'
+import { fetchDepositosEfectivo, fetchAbonos, fetchSucursales, insertGenerico } from './api'
 
-const PUEDE_VER_TODAS = ['contabilidad', 'jefe_admin_finanzas', 'gerente_admin_finanzas', 'admin_sistema', 'admin']
+const PUEDE_ESCRIBIR = ['admin', 'contabilidad', 'jefe_admin_finanzas', 'gerente_admin_finanzas', 'admin_sistema']
+const TIPOS_PERMITIDOS = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png']
+const MAX_BYTES = 5 * 1024 * 1024
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-function fmt(n) { return n == null ? '—' : formatCLP(n) }
-
-function BrechaChip({ valor, umbrales }) {
-  if (valor == null) return <span style={{ color: '#9CA3AF', fontSize: 12 }}>—</span>
-  const abs = Math.abs(valor)
-  const ok = abs <= umbrales.cuadra
-  const tol = abs <= umbrales.tolerable
-  const color = ok ? '#16A34A' : tol ? '#D97706' : '#DC2626'
-  const bg = ok ? '#DCFCE7' : tol ? '#FEF9C3' : '#FEE2E2'
-  const Icon = ok ? CheckCircle2 : tol ? AlertCircle : AlertTriangle
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 6, background: bg, color, fontSize: 12, fontWeight: 600 }}>
-      <Icon size={11} />
-      {fmt(valor)}
-    </span>
-  )
+// ── Getnet Excel helpers ──────────────────────────────────────────────────────
+const LOCAL_MAP = {
+  'OUTLET DE PUERTAS SPA': 'suc-lg',
+  'OUTLET DE PUERTAS':     'suc-lg',
+  'LA GRANJA':             'suc-lg',
+  'LOS ANGELES':           'suc-la',
+  'LOS ÁNGELES':           'suc-la',
+  'CD MAIPÚ':              'suc-mp',
+  'MAIPU':                 'suc-mp',
+}
+function getSucId(local) {
+  if (!local) return null
+  return LOCAL_MAP[local.trim().toUpperCase()] || null
+}
+function parseFechaGetnet(v) {
+  if (!v) return null
+  if (v instanceof Date) return v.toISOString()
+  const s = String(v).trim()
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/)
+  if (m) return `${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:${m[6]}.000Z`
+  const m2 = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (m2) return `${m2[3]}-${m2[2]}-${m2[1]}`
+  return null
+}
+function parseFechaAbono(v) {
+  if (!v) return null
+  if (v instanceof Date) return v.toISOString().slice(0, 10)
+  const s = String(v).trim()
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`
+  return null
+}
+function procesarExcelGetnet(buffer, nombreArchivo) {
+  const wb = XLSX.read(buffer, { type: 'array' })
+  const ws = wb.Sheets[wb.SheetNames[0]]
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' })
+  const header = rows[0]
+  const COL = {}
+  header.forEach((h, i) => { COL[String(h).trim().toUpperCase()] = i })
+  const toNum = v => { const n = parseFloat(String(v).replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n }
+  const txns = []
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i]
+    const estado = String(r[COL['ESTADO']] || '').trim().toLowerCase()
+    if (estado !== 'abonado') continue
+    const idTxn = String(r[COL['ID TRANSACCIÓN']] || '').trim()
+    if (!idTxn) continue
+    txns.push({
+      id_transaccion:    idTxn,
+      cod_aut:           String(r[COL['COD.AUT']] || '').trim(),
+      local_getnet:      String(r[COL['LOCAL']] || '').trim(),
+      sucursal_id:       getSucId(String(r[COL['LOCAL']] || '')),
+      num_local:         String(r[COL['NUM LOCAL']] || '').trim(),
+      terminal:          String(r[COL['TERMINAL']] || '').trim(),
+      vendedor_getnet:   String(r[COL['VENDEDOR']] || '').trim(),
+      marca:             String(r[COL['MARCA']] || '').trim(),
+      tipo:              String(r[COL['TIPO']] || '').trim(),
+      tipo_movimiento:   String(r[COL['TIPO MOV.']] || '').trim(),
+      cuotas:            parseInt(r[COL['CUOTAS']] || '1') || 1,
+      bin:               String(r[COL['BIN']] || '').trim(),
+      valor_venta:       toNum(r[COL['VALOR VENTA']]),
+      valor_transaccion: toNum(r[COL['VALOR TRANSACCIÓN']]),
+      comision:          toNum(r[COL['COMISIÓN']]),
+      monto_abono:       toNum(r[COL['MONTO ABONO']]),
+      fecha_venta:       parseFechaGetnet(r[COL['FECHA VENTA']]),
+      fecha_abono:       parseFechaAbono(r[COL['FECHA ABONO']]),
+      tipo_pago:         String(r[COL['TIPO PAGO']] || '').trim(),
+      estado:            'Abonado',
+      estado_transaccion:String(r[COL['ESTADO TRANSACCIÓN']] || '').trim(),
+      referencia:        String(r[COL['REFERENCIA']] || '').trim(),
+      archivo_origen:    nombreArchivo,
+    })
+  }
+  return txns
 }
 
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function validarComprobante(file) {
+  if (!TIPOS_PERMITIDOS.includes(file.type)) throw new Error('Formato no permitido. Solo PDF, JPG o PNG')
+  if (file.size > MAX_BYTES) throw new Error('El archivo supera los 5MB')
+}
+async function subirComprobante(file, sucursalId, depositoId) {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const path = `${sucursalId}/${depositoId}/${safeName}`
+  const { error } = await supabase.storage.from('comprobantes-depositos').upload(path, file, { upsert: true, contentType: file.type })
+  if (error) throw error
+  return path
+}
 function MoneyInput({ value, onChange, disabled }) {
   const [text, setText] = useState(value ? formatCLP(value) : '')
   const [focused, setFocused] = useState(false)
   useEffect(() => { if (!focused) setText(value ? formatCLP(value) : '') }, [value, focused])
   return (
     <input type="text" inputMode="numeric" disabled={disabled} placeholder="$0" value={text}
-      style={{ ...inputSt, textAlign: 'right', fontSize: 12, background: disabled ? '#F9FAFB' : '#fff' }}
+      style={{ ...inputSt, textAlign: 'right', background: disabled ? '#F9FAFB' : '#fff' }}
       onFocus={e => { setFocused(true); setText(value ? String(value) : ''); setTimeout(() => e.target.select(), 0) }}
       onChange={e => { setText(e.target.value); onChange(parseCLP(e.target.value)) }}
       onBlur={() => { setFocused(false); setText(value ? formatCLP(value) : '') }}
     />
   )
 }
-
-// ── Fetch BSALE via Edge Function ──────────────────────────────────────────
-async function fetchBsaleDia(fecha, sucursal_id) {
-  try {
-    const { data: { session } } = await supabase.auth.getSession()
-    const headers = { 'Content-Type': 'application/json' }
-    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
-    const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/bsale-ventas-dia`,
-      { method: 'POST', headers, body: JSON.stringify({ fecha, sucursal_id }) }
-    )
-    if (!res.ok) return null
-    return await res.json()
-  } catch (e) {
-    console.warn('[fetchBsaleDia]', e.message)
-    return null
+function KpiMini({ title, value }) {
+  return (
+    <div style={{ background: '#F9FAFB', borderRadius: 8, padding: '8px 12px', border: '1px solid #F3F4F6' }}>
+      <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#9CA3AF', letterSpacing: '0.05em' }}>{title}</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginTop: 2 }}>{value}</div>
+    </div>
+  )
+}
+function ComprobanteCell({ depositoId, sucursalId, comprobanteUrl, comprobanteNombre, onUpdated }) {
+  const inputRef = useRef(null)
+  const [uploading, setUploading] = useState(false)
+  async function abrirComprobante() {
+    if (!comprobanteUrl) return
+    try {
+      let path = comprobanteUrl
+      const marker = '/comprobantes-depositos/'
+      const idx = comprobanteUrl.indexOf(marker)
+      if (idx >= 0) path = comprobanteUrl.substring(idx + marker.length)
+      const { data, error } = await supabase.storage.from('comprobantes-depositos').createSignedUrl(path, 60)
+      if (error) throw error
+      window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'No se pudo abrir') }
   }
+  async function onFileChange(e) {
+    const file = e.target.files?.[0]; e.target.value = ''
+    if (!file) return
+    try { validarComprobante(file) } catch (e) { toast.error(e.message); return }
+    setUploading(true)
+    try {
+      const path = await subirComprobante(file, sucursalId, depositoId)
+      const { error } = await supabase.from('depositos_efectivo').update({ comprobante_url: path, comprobante_nombre: file.name }).eq('id', depositoId)
+      if (error) throw error
+      toast.success('Comprobante adjuntado')
+      onUpdated()
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Error al subir') }
+    finally { setUploading(false) }
+  }
+  return (
+    <>
+      <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }} onChange={onFileChange} />
+      {comprobanteUrl ? (
+        <button onClick={abrirComprobante} title={comprobanteNombre ?? 'Ver comprobante'}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#16A34A', display: 'inline-flex', alignItems: 'center' }}>
+          <FileCheck size={16} />
+        </button>
+      ) : (
+        <button onClick={() => inputRef.current?.click()} disabled={uploading}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', display: 'inline-flex', alignItems: 'center' }}>
+          <Paperclip size={16} />
+        </button>
+      )}
+    </>
+  )
 }
 
-// ── Panel declaración de un vendedor ───────────────────────────────────────
-function PanelDeclaracion({ vendedorBsale, cierre, sucursalId, fecha, usuario, vendedorLocal, umbrales, onGuardado }) {
-  const [valores, setValores] = useState(() => {
-    if (cierre) return MEDIOS.reduce((a, m) => ({ ...a, [m.key]: Number(cierre[m.key] ?? 0) }), {})
-    return MEDIOS.reduce((a, m) => ({ ...a, [m.key]: 0 }), {})
-  })
-  const [obs, setObs] = useState(cierre?.observaciones_vendedor ?? '')
-  const [saving, setSaving] = useState(false)
-  const [otrosOpen, setOtrosOpen] = useState(false)
+// ── Importador Getnet ─────────────────────────────────────────────────────────
+function ImportadorGetnet() {
+  const fileRef = useRef()
+  const [dragOver, setDragOver] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [resultado, setResultado] = useState(null)
 
-  const totalDeclarado = useMemo(() => MEDIOS.reduce((s, m) => s + (valores[m.key] || 0), 0), [valores])
-  const recaudBsale = vendedorBsale?.venta ?? null
-  const brecha = recaudBsale != null ? totalDeclarado - recaudBsale : null
-
-  const esReadOnly = cierre && cierre.estado !== 'declarado'
-
-  const MEDIOS_PPAL = MEDIOS.filter(m => ['efectivo', 't_credito', 't_debito', 'webpay', 'transferencia'].includes(m.key))
-  const MEDIOS_OTROS = MEDIOS.filter(m => !['efectivo', 't_credito', 't_debito', 'webpay', 'transferencia'].includes(m.key))
-
-  async function guardar() {
-    if (!sucursalId) { toast.error('Selecciona una sucursal'); return }
-    setSaving(true)
+  async function procesarArchivo(file) {
+    if (!file) return
+    setUploading(true)
+    setResultado(null)
     try {
-      // Si hay vendedorLocal (admin declarando en nombre de otro), usar su id; si no, el usuario actual
-      const vId = vendedorLocal?.id ?? usuario.id
-      const bsaleVId = vendedorBsale?.bsale_user_id ?? null
-      const payload = {
-        fecha, sucursal_id: sucursalId, vendedor_id: vId,
-        bsale_vendedor_id: bsaleVId,
-        observaciones_vendedor: obs.trim() || null,
-        venta_bsale_api: recaudBsale,
-        ...valores
+      const buffer = await file.arrayBuffer()
+      const txns = procesarExcelGetnet(new Uint8Array(buffer), file.name)
+      if (txns.length === 0) {
+        setResultado({ ok: false, msg: 'No se encontraron transacciones "Abonado" en el archivo.' })
+        return
       }
-      const result = cierre?.id
-        ? await actualizarDeclaracion(cierre.id, payload)
-        : await declararCierre(payload)
-      toast.success('Cierre guardado')
-      onGuardado(result)
+      let insertadas = 0, duplicadas = 0
+      const chunk = 500
+      for (let i = 0; i < txns.length; i += chunk) {
+        const bloque = txns.slice(i, i + chunk)
+        const { data, error } = await supabase
+          .from('getnet_transacciones')
+          .upsert(bloque, { onConflict: 'id_transaccion', ignoreDuplicates: true })
+          .select('id')
+        if (error) throw error
+        insertadas += (data || []).length
+        duplicadas += bloque.length - (data || []).length
+      }
+      setResultado({ ok: true, total: txns.length, insertadas, duplicadas,
+        msg: `✅ ${txns.length.toLocaleString('es-CL')} transacciones procesadas — ${insertadas.toLocaleString('es-CL')} nuevas, ${duplicadas.toLocaleString('es-CL')} ya existían` })
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Error al guardar')
-    } finally { setSaving(false) }
+      setResultado({ ok: false, msg: `Error: ${e.message}` })
+    } finally {
+      setUploading(false)
+    }
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={cardSt}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#1F4E79', marginBottom: 4 }}>
+        Importar transacciones Getnet
+      </div>
+      <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 16 }}>
+        Descarga el reporte "Ventas" desde el portal Getnet y súbelo aquí. Solo se importan filas con ESTADO = "Abonado". Las duplicadas se ignoran.
+      </div>
 
-      {/* Resumen BSALE del vendedor */}
-      {vendedorBsale && (
-        <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #1a2f4a 100%)', borderRadius: 10, padding: '14px 16px', color: '#fff' }}>
-          <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Venta atribuida BSALE
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-            <div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>{fmt(vendedorBsale.venta)}</div>
-              <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>
-                {vendedorBsale.docs_venta} doc{vendedorBsale.docs_venta !== 1 ? 's' : ''}
-                {vendedorBsale.nc > 0 && ` · NC: -${fmt(vendedorBsale.nc)}`}
-              </div>
-            </div>
-            {/* Medios de pago BSALE */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
-              {Object.entries(vendedorBsale.modalidades ?? {})
-                .sort(([, a], [, b]) => Number(b) - Number(a))
-                .slice(0, 4)
-                .map(([medio, amt]) => (
-                  <div key={medio} style={{ fontSize: 10, opacity: 0.8 }}>
-                    {medio.split(' ').slice(0, 2).join(' ')}: {fmt(Number(amt))}
-                  </div>
-                ))}
-            </div>
-          </div>
-          <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.15)', fontSize: 10, opacity: 0.65, lineHeight: 1.5 }}>
-            ℹ️ Ventas del día atribuidas a este vendedor. La declaración puede ser mayor si cobró facturas anteriores, abonos a cuentas corrientes u otros cobros que no generan venta nueva en BSALE.
-          </div>
+      <div
+        onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => { e.preventDefault(); setDragOver(false); procesarArchivo(e.dataTransfer.files[0]) }}
+        onClick={() => fileRef.current?.click()}
+        style={{
+          border: `2px dashed ${dragOver ? '#1F4E79' : '#D1D5DB'}`,
+          borderRadius: 12, padding: '32px 20px', textAlign: 'center', cursor: 'pointer',
+          background: dragOver ? '#EFF6FF' : '#F9FAFB', transition: 'all 0.2s',
+        }}
+      >
+        <div style={{ fontSize: 28, marginBottom: 6 }}>{uploading ? '⏳' : '📂'}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
+          {uploading ? 'Procesando...' : 'Arrastra el Excel de Getnet aquí'}
+        </div>
+        <div style={{ fontSize: 11, color: '#6B7280', marginTop: 3 }}>o haz clic para seleccionar (.xlsx)</div>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }}
+          onChange={e => { procesarArchivo(e.target.files[0]); e.target.value = '' }} />
+      </div>
+
+      {resultado && (
+        <div style={{
+          marginTop: 12, padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+          background: resultado.ok ? '#DCFCE7' : '#FEE2E2',
+          color: resultado.ok ? '#166534' : '#991B1B',
+        }}>
+          {resultado.msg}
         </div>
       )}
 
-      {/* Medios principales */}
-      <div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Medios principales</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          {MEDIOS_PPAL.map(med => (
-            <div key={med.key}>
-              <label style={{ ...labelSt, marginBottom: 3 }}>{med.label}</label>
-              <MoneyInput disabled={esReadOnly} value={valores[med.key]} onChange={n => setValores(p => ({ ...p, [med.key]: n }))} />
-            </div>
-          ))}
-        </div>
+      <div style={{ marginTop: 12, fontSize: 11, color: '#9CA3AF' }}>
+        Columnas requeridas: COD.AUT · LOCAL · TERMINAL · VENDEDOR · MARCA · TIPO · VALOR VENTA · COMISIÓN · MONTO ABONO · FECHA VENTA · FECHA ABONO · ESTADO · ID TRANSACCIÓN
       </div>
-
-      {/* Otros medios */}
-      <div>
-        <button onClick={() => setOtrosOpen(v => !v)}
-          style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', fontSize: 12, fontWeight: 600, color: '#374151' }}>
-          Otros medios
-          {otrosOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        </button>
-        {otrosOpen && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
-            {MEDIOS_OTROS.map(med => (
-              <div key={med.key}>
-                <label style={{ ...labelSt, marginBottom: 3 }}>{med.label}</label>
-                <MoneyInput disabled={esReadOnly} value={valores[med.key]} onChange={n => setValores(p => ({ ...p, [med.key]: n }))} />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Total y brecha */}
-      <div style={{ background: '#F9FAFB', borderRadius: 8, padding: '10px 12px', fontSize: 12 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-          <span style={{ color: '#6B7280' }}>Tu declaración</span>
-          <span style={{ fontWeight: 700, fontSize: 14 }}>{fmt(totalDeclarado)}</span>
-        </div>
-        {recaudBsale != null && (
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#6B7280' }}>Brecha vs BSALE</span>
-            <BrechaChip valor={brecha} umbrales={umbrales} />
-          </div>
-        )}
-      </div>
-
-      {/* Documentos BSALE — auditoría */}
-      {vendedorBsale?.documentos?.length > 0 && (
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-            Documentos BSALE ({vendedorBsale.documentos.length})
-          </div>
-          <div style={{ background: '#F9FAFB', borderRadius: 8, padding: '8px 10px', maxHeight: 200, overflowY: 'auto' }}>
-            {vendedorBsale.documentos.map((doc) => (
-              <div key={doc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0', borderBottom: '0.5px solid #E5E7EB', fontSize: 11 }}>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', minWidth: 0 }}>
-                  <span style={{
-                    background: doc.es_nc ? '#FEE2E2' : doc.tipo?.includes('BOLETA') ? '#DBEAFE' : doc.tipo?.includes('TICKET') ? '#D1FAE5' : '#FEF3C7',
-                    color: doc.es_nc ? '#DC2626' : doc.tipo?.includes('BOLETA') ? '#1D4ED8' : doc.tipo?.includes('TICKET') ? '#065F46' : '#92400E',
-                    padding: '1px 5px', borderRadius: 3, fontSize: 10, fontWeight: 600, flexShrink: 0
-                  }}>
-                    {doc.es_nc ? 'NC' : doc.tipo?.includes('BOLETA') ? 'BOL' : doc.tipo?.includes('TICKET') ? 'TKT' : 'FAC'}
-                  </span>
-                  <span style={{ color: '#374151' }}>N° {doc.numero}</span>
-                  {doc.es_cruzado && (
-                    <span title={`Recaudó: ${doc.recaudador?.nombre} · Vendió: ${doc.vendedor?.nombre}`}
-                      style={{
-                        background: '#EDE9FE', color: '#5B21B6',
-                        padding: '1px 5px', borderRadius: 3, fontSize: 9, fontWeight: 600,
-                        display: 'inline-flex', alignItems: 'center', gap: 3
-                      }}>
-                      ↔ {doc.recaudador?.id === vendedorBsale.bsale_user_id
-                        ? `vendió ${doc.vendedor?.nombre?.split(' ')[0] ?? ''}`
-                        : `recaudó ${doc.recaudador?.nombre?.split(' ')[0] ?? ''}`}
-                    </span>
-                  )}
-                </div>
-                <span style={{ fontWeight: 600, color: doc.es_nc ? '#DC2626' : '#111827', flexShrink: 0 }}>
-                  {doc.total < 0 ? '-' : ''}{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(Math.abs(doc.total))}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Observaciones */}
-      <div>
-        <label style={labelSt}>Observaciones</label>
-        <textarea disabled={esReadOnly} value={obs} onChange={e => setObs(e.target.value)}
-          placeholder="Notas opcionales" rows={2}
-          style={{ ...inputSt, resize: 'vertical', fontFamily: 'inherit', fontSize: 12 }} />
-      </div>
-
-      {!esReadOnly && (
-        <button onClick={guardar} disabled={saving} style={{ ...btnSt(), opacity: saving ? 0.6 : 1 }}>
-          {saving && <Loader2 size={13} />}
-          {cierre ? 'Actualizar cierre' : 'Firmar cierre'}
-        </button>
-      )}
-      {esReadOnly && (
-        <div style={{ textAlign: 'center', padding: '8px 0', fontSize: 12, color: '#6B7280' }}>
-          {estadoBadge(cierre.estado)} — cierre ya procesado
-        </div>
-      )}
     </div>
   )
 }
 
-// ── Componente principal ───────────────────────────────────────────────────
-export function CierreDelDiaTab({ usuario }) {
-  const esAdmin = PUEDE_VER_TODAS.includes(usuario.rol)
-  const [sucursales, setSucursales] = useState([])
-  const [sucursalSel, setSucursalSel] = useState(esAdmin ? 'suc-lg' : (usuario.sucursal_id ?? ''))
-  const [fecha, setFecha] = useState(todayISO())
-  const [umbrales, setUmbrales] = useState(UMBRALES_DEFAULT)
+// ── SeccionDeposito (sin cambios) ─────────────────────────────────────────────
+function SeccionDeposito({ tipo, titulo, sucursalEf, desde, hasta, puedeEscribir, sucursales }) {
+  const [filas, setFilas] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const formFileRef = useRef(null)
+  const now = new Date()
+  const [form, setForm] = useState({ sucursal_id: sucursalEf ?? '', fecha: hasta, monto: 0, banco: '', n_comprobante: '', observacion: '', comprobanteFile: null })
+  const montoKey = tipo === 'depositos_efectivo' ? 'monto_depositado' : tipo === 'abonos_getnet' ? 'total_abono' : 'deposito_transbank'
+  const total = filas.reduce((s, r) => s + Number(r[montoKey] ?? 0), 0)
 
-  // Datos BSALE
-  const [bsaleData, setBsaleData] = useState(null)
-  const [loadingBsale, setLoadingBsale] = useState(false)
-
-  // Cierres declarados del día
-  const [cierres, setCierres] = useState([])
-  const [loadingCierres, setLoadingCierres] = useState(false)
-
-  // Mapa bsale_user_id → usuario local (para declarar en nombre de otro vendedor)
-  const [bsaleUserMap, setBsaleUserMap] = useState({})
-
-  // Panel lateral
-  const [panelVendedor, setPanelVendedor] = useState(null) // { bsaleUser, cierre }
-  const [savingCorrob, setSavingCorrob] = useState(false)
-  const [valoresCorrob, setValoresCorrob] = useState(null)
-  const [obsAdmin, setObsAdmin] = useState('')
-
-  // Cargar catálogos
   useEffect(() => {
-    fetchSucursales().then(setSucursales).catch(() => {})
-    fetchUmbrales().then(setUmbrales).catch(() => {})
-    // Mapa bsale_user_id → usuario local
-    supabase.from('usuarios').select('id, nombre, bsale_user_id').then(({ data }) => {
-      const m = {}
-      for (const u of data ?? []) if (u.bsale_user_id) m[String(u.bsale_user_id)] = u
-      setBsaleUserMap(m)
-    })
-  }, [])
+    setLoading(true)
+    const fn = tipo === 'depositos_efectivo'
+      ? fetchDepositosEfectivo({ sucursal_id: sucursalEf, desde, hasta })
+      : fetchAbonos(tipo, { sucursal_id: sucursalEf, desde, hasta })
+    fn.then(setFilas).catch(e => toast.error(e.message)).finally(() => setLoading(false))
+  }, [tipo, sucursalEf, desde, hasta])
 
-  // Cargar datos BSALE
-  const cargarBsale = useCallback(async () => {
-    if (!sucursalSel) return
-    setLoadingBsale(true)
-    setBsaleData(null)
+  async function handleGuardar() {
+    if (!form.sucursal_id) { toast.error('Selecciona sucursal'); return }
+    if (form.monto <= 0) { toast.error('Monto debe ser mayor a 0'); return }
+    setSaving(true)
     try {
-      const data = await fetchBsaleDia(fecha, sucursalSel)
-      setBsaleData(data)
-    } catch (e) {
-      toast.error('Error al cargar BSALE')
-    } finally { setLoadingBsale(false) }
-  }, [fecha, sucursalSel])
-
-  // Cargar cierres declarados
-  const cargarCierres = useCallback(async () => {
-    if (!sucursalSel) return
-    setLoadingCierres(true)
-    try {
-      let q = supabase.from('cierres_caja').select('*')
-        .eq('fecha', fecha)
-        .eq('sucursal_id', sucursalSel)
-        .neq('estado', 'anulado')
-      if (!esAdmin) q = q.eq('vendedor_id', usuario.id)
-      const { data, error } = await q
-      if (error) throw error
-
-      // Resolver nombres vendedores
-      const vIds = [...new Set((data ?? []).map(r => r.vendedor_id).filter(Boolean))]
-      let vendMap = {}
-      if (vIds.length > 0) {
-        const { data: vends } = await supabase.from('usuarios').select('id, nombre').in('id', vIds)
-        for (const v of vends ?? []) vendMap[v.id] = v.nombre
+      if (form.comprobanteFile) validarComprobante(form.comprobanteFile)
+      const payload = { sucursal_id: form.sucursal_id, fecha: form.fecha, n_comprobante: form.n_comprobante || null }
+      if (tipo === 'depositos_efectivo') { payload.monto_depositado = form.monto; payload.banco = form.banco || null; payload.observacion = form.observacion || null }
+      else if (tipo === 'abonos_getnet') payload.total_abono = form.monto
+      else payload.deposito_transbank = form.monto
+      if (tipo === 'depositos_efectivo' && form.comprobanteFile) {
+        const uid = (await supabase.auth.getSession()).data.session?.user.id
+        const row = uid ? { ...payload, registrado_por: uid } : payload
+        const { data, error } = await supabase.from('depositos_efectivo').insert(row).select('id').single()
+        if (error) throw error
+        const path = await subirComprobante(form.comprobanteFile, form.sucursal_id, String(data.id))
+        await supabase.from('depositos_efectivo').update({ comprobante_url: path, comprobante_nombre: form.comprobanteFile.name }).eq('id', data.id)
+      } else {
+        await insertGenerico(tipo, payload)
       }
-      setCierres((data ?? []).map(r => ({
-        ...r,
-        vendedor_nombre: r.vendedor_id ? (vendMap[r.vendedor_id] ?? null) : null
-      })))
-    } catch (e) {
-      toast.error('Error al cargar cierres')
-    } finally { setLoadingCierres(false) }
-  }, [fecha, sucursalSel, esAdmin, usuario.id])
-
-  useEffect(() => {
-    cargarBsale()
-    cargarCierres()
-  }, [fecha, sucursalSel])
-
-  // Cruzar RECAUDADORES BSALE con cierres declarados
-  // Usamos por_recaudador (no por_vendedor) porque el cierre de caja se cuadra
-  // con quien EMITIÓ la venta (tiene la plata), no con el seller asignado.
-  const filas = useMemo(() => {
-    const recaudadoresBsale = bsaleData?.por_recaudador ?? []
-    const result = []
-
-    // Recaudadores con actividad BSALE hoy
-    for (const bv of recaudadoresBsale) {
-      const cierre = cierres.find(c => {
-        return String(c.bsale_vendedor_id) === String(bv.bsale_user_id) ||
-          (c.vendedor_nombre ?? '').toUpperCase() === bv.nombre
-      })
-      result.push({ bsaleUser: bv, cierre: cierre ?? null })
-    }
-
-    // Cierres sin actividad BSALE (declaró pero no hay docs en BSALE ese día)
-    for (const c of cierres) {
-      const yaEsta = result.some(r => r.cierre?.id === c.id)
-      if (!yaEsta) result.push({ bsaleUser: null, cierre: c })
-    }
-
-    return result
-  }, [bsaleData, cierres])
-
-  // KPIs resumen
-  const totalBsale = bsaleData?.total_venta ?? null
-  const totalDeclarado = cierres.reduce((s, c) => s + Number(c.total_declarado ?? 0), 0)
-  const brechaGlobal = totalBsale != null ? totalDeclarado - totalBsale : null
-  const pendientes = cierres.filter(c => c.estado === 'declarado').length
-  const corroborados = cierres.filter(c => ['cuadra', 'tolerable', 'descuadre'].includes(c.estado)).length
-
-  // Panel lateral: corroborar
-  function abrirPanel(fila) {
-    setPanelVendedor(fila)
-    if (fila.cierre) {
-      const v = {}
-      for (const med of MEDIOS) v[`${med.key}_corrob`] = Number(fila.cierre[`${med.key}_corrob`] ?? fila.cierre[med.key] ?? 0)
-      setValoresCorrob(v)
-      setObsAdmin(fila.cierre.observaciones_admin ?? '')
-    } else {
-      setValoresCorrob(null)
-      setObsAdmin('')
-    }
-  }
-
-  async function handleCorrob() {
-    if (!panelVendedor?.cierre || !valoresCorrob) return
-    setSavingCorrob(true)
-    try {
-      const updated = await corroborarCierre({ id: panelVendedor.cierre.id, ...valoresCorrob, observaciones_admin: obsAdmin.trim() || null })
-      toast.success(`Corroborado — estado: ${updated.estado}`)
-      setCierres(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated, vendedor_nombre: c.vendedor_nombre } : c))
-      setPanelVendedor(null)
+      toast.success('Registro agregado')
+      setOpen(false)
+      setForm({ sucursal_id: sucursalEf ?? '', fecha: hasta, monto: 0, banco: '', n_comprobante: '', observacion: '', comprobanteFile: null })
+      const fn = tipo === 'depositos_efectivo' ? fetchDepositosEfectivo({ sucursal_id: sucursalEf, desde, hasta }) : fetchAbonos(tipo, { sucursal_id: sucursalEf, desde, hasta })
+      fn.then(setFilas).catch(() => {})
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Error') }
-    finally { setSavingCorrob(false) }
+    finally { setSaving(false) }
   }
-
-  const totalCorrobPanel = useMemo(() => {
-    if (!valoresCorrob) return 0
-    return MEDIOS.reduce((s, m) => s + Number(valoresCorrob[`${m.key}_corrob`] ?? 0), 0)
-  }, [valoresCorrob])
-
-  const diferenciaPanel = panelVendedor?.cierre ? totalCorrobPanel - Number(panelVendedor.cierre.total_declarado ?? 0) : 0
-  const obsRequerida = diferenciaPanel !== 0 && obsAdmin.trim() === ''
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-      {/* ── Filtros ── */}
-      <div style={cardSt}>
-        <div style={{ display: 'grid', gridTemplateColumns: esAdmin ? '1fr 1fr auto auto' : '1fr auto auto', gap: 12, alignItems: 'flex-end' }}>
-          {esAdmin && (
-            <div>
-              <label style={labelSt}>Sucursal</label>
-              <select style={selectSt} value={sucursalSel} onChange={e => setSucursalSel(e.target.value)}>
-                {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-              </select>
-            </div>
-          )}
-          <div>
-            <label style={labelSt}>Fecha</label>
-            <input type="date" style={inputSt} value={fecha} onChange={e => setFecha(e.target.value)} />
-          </div>
-          <div style={{ alignSelf: 'flex-end' }}>
-            <button onClick={() => { cargarBsale(); cargarCierres() }}
-              style={{ ...btnSt('#6B7280'), padding: '8px 14px' }}
-              disabled={loadingBsale || loadingCierres}>
-              {(loadingBsale || loadingCierres)
-                ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
-                : <RefreshCw size={14} />}
-            </button>
-          </div>
-        </div>
+    <div style={cardSt}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', flex: '1 1 auto', minWidth: 0 }}>{titulo}</div>
+        {puedeEscribir && (
+          <button onClick={() => setOpen(true)} style={{ ...btnSt(), padding: '5px 12px', fontSize: 12, flexShrink: 0, whiteSpace: 'nowrap' }}>
+            <Plus size={13} /> Registrar
+          </button>
+        )}
       </div>
-
-      {/* ── KPIs ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
-        {[
-          { label: 'Venta BSALE', value: totalBsale, loading: loadingBsale, color: '#1e3a5f' },
-          { label: 'Total declarado', value: totalDeclarado || null, color: '#374151' },
-          { label: 'Brecha global', value: brechaGlobal, isBrecha: true, color: '#374151' },
-          { label: 'Pendientes', value: pendientes, isCuenta: true, color: pendientes > 0 ? '#D97706' : '#16A34A' },
-          { label: 'Corroborados', value: corroborados, isCuenta: true, color: '#16A34A' },
-        ].map(kpi => (
-          <div key={kpi.label} style={{ ...cardSt, padding: '12px 14px' }}>
-            <div style={{ fontSize: 10, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-              {kpi.label}
-            </div>
-            {kpi.loading
-              ? <Loader2 size={16} style={{ color: '#9CA3AF' }} />
-              : kpi.isCuenta
-                ? <div style={{ fontSize: 22, fontWeight: 700, color: kpi.color }}>{kpi.value ?? 0}</div>
-                : kpi.isBrecha && brechaGlobal != null
-                  ? <BrechaChip valor={brechaGlobal} umbrales={umbrales} />
-                  : <div style={{ fontSize: 18, fontWeight: 700, color: kpi.color }}>{kpi.value != null ? fmt(kpi.value) : '—'}</div>
-            }
-          </div>
-        ))}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8, marginBottom: 12 }}>
+        <KpiMini title="Total mes" value={formatCLP(total)} />
+        <KpiMini title="Movimientos" value={String(filas.length)} />
+        <KpiMini title="Último" value={filas.length > 0 ? String(filas[0].fecha ?? '—') : '—'} />
       </div>
-
-      {/* ── Medios de pago globales BSALE ── */}
-      {bsaleData?.medios_global && Object.keys(bsaleData.medios_global).length > 0 && (
-        <div style={{ ...cardSt, padding: '12px 16px' }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Desglose BSALE por medio de pago
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {Object.entries(bsaleData.medios_global)
-              .sort(([, a], [, b]) => Number(b) - Number(a))
-              .map(([medio, amt]) => (
-                <div key={medio} style={{ background: '#F3F4F6', borderRadius: 6, padding: '4px 10px', fontSize: 12 }}>
-                  <span style={{ color: '#6B7280' }}>{medio}: </span>
-                  <span style={{ fontWeight: 600, color: '#111827' }}>{fmt(Number(amt))}</span>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Tabla de vendedores ── */}
-      <div style={{ ...cardSt, padding: 0, overflow: 'hidden' }}>
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '20px 0' }}><Loader2 size={20} style={{ display: 'inline-block', color: '#9CA3AF' }} /></div>
+      ) : filas.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '20px 0', color: '#9CA3AF', fontSize: 13 }}>Sin movimientos</div>
+      ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#F9FAFB' }}>
-                {['Vendedor', 'Venta BSALE', 'Venta BSALE', 'Declarado', 'Brecha', 'Estado', ''].map(h => (
-                  <th key={h} style={{
-                    padding: '10px 14px', fontSize: 11, fontWeight: 600, color: '#6B7280',
-                    textAlign: ['Venta BSALE', 'Venta BSALE', 'Declarado', 'Brecha'].includes(h) ? 'right' : 'left',
-                    borderBottom: '1px solid #E5E7EB', whiteSpace: 'nowrap'
-                  }}>{h}</th>
-                ))}
+              <tr>
+                <th style={TH}>Fecha</th>
+                <th style={TH}>Sucursal</th>
+                <th style={{ ...TH, textAlign: 'right' }}>Monto</th>
+                {tipo === 'depositos_efectivo' && <th style={TH}>Banco</th>}
+                <th style={TH}>N° comprob.</th>
+                {tipo === 'depositos_efectivo' && <th style={{ ...TH, textAlign: 'center' }}>Adjunto</th>}
               </tr>
             </thead>
             <tbody>
-              {(loadingBsale || loadingCierres) && (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: '32px 0' }}>
-                  <Loader2 size={20} style={{ display: 'inline-block', color: '#9CA3AF' }} />
-                </td></tr>
-              )}
-              {!loadingBsale && !loadingCierres && filas.length === 0 && (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: '32px 0', color: '#9CA3AF', fontSize: 13 }}>
-                  Sin actividad para esta fecha y sucursal
-                </td></tr>
-              )}
-              {!loadingBsale && !loadingCierres && filas.map((fila, i) => {
-                const { bsaleUser, cierre } = fila
-                const recaud = bsaleUser?.venta ?? null
-                const declarado = cierre ? Number(cierre.total_declarado ?? 0) : null
-                const brecha = recaud != null && declarado != null ? declarado - recaud : null
-                const estado = cierre?.estado ?? null
-                const nombre = bsaleUser?.nombre ?? cierre?.vendedor_nombre ?? '—'
-
+              {filas.map((r, i) => {
+                const sucName = sucursales.find(s => s.id === r.sucursal_id)?.nombre ?? '—'
                 return (
-                  <tr key={i}
-                    style={{ borderTop: '1px solid #F3F4F6', cursor: 'pointer', transition: 'background 0.1s' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    onClick={() => abrirPanel(fila)}>
-                    <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 500 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{
-                          width: 28, height: 28, borderRadius: '50%', background: '#E0E7FF',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 11, fontWeight: 700, color: '#4F46E5', flexShrink: 0
-                        }}>
-                          {nombre.split(' ').map(w => w[0]).join('').slice(0, 2)}
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{nombre}</div>
-                          {bsaleUser && (
-                            <div style={{ fontSize: 10, color: '#9CA3AF' }}>
-                              {bsaleUser.docs_venta} doc{bsaleUser.docs_venta !== 1 ? 's' : ''}
-                              {bsaleUser.nc > 0 && ` · ${bsaleUser.docs_nc} NC`}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, fontSize: 13 }}>
-                      {recaud != null ? fmt(recaud) : <span style={{ color: '#D1D5DB' }}>—</span>}
-                    </td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontSize: 12, color: '#6B7280' }}>
-                      {bsaleUser?.venta != null ? fmt(bsaleUser.venta) : <span style={{ color: '#D1D5DB' }}>—</span>}
-                    </td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontSize: 13 }}>
-                      {declarado != null ? fmt(declarado) : (
-                        <span style={{ fontSize: 11, color: '#9CA3AF', background: '#FEF9C3', padding: '2px 6px', borderRadius: 4 }}>Pendiente</span>
-                      )}
-                    </td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right' }}>
-                      <BrechaChip valor={brecha} umbrales={umbrales} />
-                    </td>
-                    <td style={{ padding: '10px 14px' }}>
-                      {estado ? estadoBadge(estado) : <span style={{ fontSize: 11, color: '#9CA3AF' }}>Sin cierre</span>}
-                    </td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <span style={{ fontSize: 12, color: '#4F46E5', fontWeight: 500 }}>
-                        {cierre?.estado === 'declarado' ? 'Corroborar →' : cierre ? 'Ver →' : esAdmin ? 'Ver →' : 'Declarar →'}
-                      </span>
-                    </td>
+                  <tr key={r.id ?? i} style={{ borderTop: '1px solid #F3F4F6' }}>
+                    <td style={TD}>{String(r.fecha ?? '—')}</td>
+                    <td style={TD}>{sucName}</td>
+                    <td style={{ ...TD, textAlign: 'right', fontWeight: 600 }}>{formatCLP(Number(r[montoKey] ?? 0))}</td>
+                    {tipo === 'depositos_efectivo' && <td style={TD}>{String(r.banco ?? '—')}</td>}
+                    <td style={TD}>{String(r.n_comprobante ?? '—')}</td>
+                    {tipo === 'depositos_efectivo' && (
+                      <td style={{ ...TD, textAlign: 'center' }}>
+                        <ComprobanteCell
+                          depositoId={String(r.id ?? '')} sucursalId={String(r.sucursal_id ?? '')}
+                          comprobanteUrl={r.comprobante_url ?? null} comprobanteNombre={r.comprobante_nombre ?? null}
+                          onUpdated={() => fetchDepositosEfectivo({ sucursal_id: sucursalEf, desde, hasta }).then(setFilas).catch(() => {})}
+                        />
+                      </td>
+                    )}
                   </tr>
                 )
               })}
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* ── Panel lateral ── */}
-      {panelVendedor && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex' }}>
-          <div style={{ flex: 1, background: 'rgba(0,0,0,0.4)' }} onClick={() => setPanelVendedor(null)} />
-          <aside style={{
-            width: 520, maxWidth: '100%', height: '100%', background: '#fff',
-            display: 'flex', flexDirection: 'column',
-            boxShadow: '-4px 0 32px rgba(0,0,0,0.15)'
-          }}>
-
-            {/* Header panel */}
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #F3F4F6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      )}
+      {open && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)', padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 24, maxWidth: 440, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }}>
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Nuevo registro — {titulo}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>
-                  {panelVendedor.bsaleUser?.nombre ?? panelVendedor.cierre?.vendedor_nombre ?? 'Vendedor'}
-                </div>
-                <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>{fecha}</div>
+                <label style={labelSt}>Sucursal</label>
+                <select style={selectSt} value={form.sucursal_id} onChange={e => setForm(p => ({ ...p, sucursal_id: e.target.value }))}>
+                  <option value="">Selecciona…</option>
+                  {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                </select>
               </div>
-              <button onClick={() => setPanelVendedor(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', padding: 4 }}>
-                <X size={18} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={labelSt}>Fecha</label>
+                  <input type="date" style={inputSt} value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={labelSt}>Monto</label>
+                  <MoneyInput value={form.monto} onChange={n => setForm(p => ({ ...p, monto: n }))} />
+                </div>
+              </div>
+              {tipo === 'depositos_efectivo' && (
+                <div>
+                  <label style={labelSt}>Banco</label>
+                  <input style={inputSt} value={form.banco} onChange={e => setForm(p => ({ ...p, banco: e.target.value }))} />
+                </div>
+              )}
+              <div>
+                <label style={labelSt}>N° comprobante</label>
+                <input style={inputSt} value={form.n_comprobante} onChange={e => setForm(p => ({ ...p, n_comprobante: e.target.value }))} />
+              </div>
+              {tipo === 'depositos_efectivo' && (
+                <>
+                  <div>
+                    <label style={labelSt}>Observación</label>
+                    <input style={inputSt} value={form.observacion} onChange={e => setForm(p => ({ ...p, observacion: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={labelSt}>Comprobante</label>
+                    <input ref={formFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }}
+                      onChange={e => {
+                        const file = e.target.files?.[0] ?? null; e.target.value = ''
+                        if (!file) return
+                        try { validarComprobante(file); setForm(p => ({ ...p, comprobanteFile: file })) }
+                        catch (err) { toast.error(err instanceof Error ? err.message : 'Archivo no válido') }
+                      }} />
+                    <button type="button" onClick={() => formFileRef.current?.click()}
+                      style={{ ...btnOutlineSt, width: '100%', justifyContent: 'flex-start', fontSize: 12 }}>
+                      <Paperclip size={13} />
+                      {form.comprobanteFile ? form.comprobanteFile.name : 'Adjuntar comprobante'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+              <button onClick={() => setOpen(false)} style={btnOutlineSt}>Cancelar</button>
+              <button onClick={handleGuardar} disabled={saving} style={{ ...btnSt(), opacity: saving ? 0.6 : 1 }}>
+                {saving && <Loader2 size={13} />} Guardar
               </button>
             </div>
-
-            <div style={{ flex: 1, padding: '16px 20px', overflowY: 'auto', minHeight: 0 }}>
-
-              {/* Si es el propio vendedor o no hay cierre → panel declaración */}
-              {(!esAdmin || !panelVendedor.cierre || panelVendedor.cierre.estado === 'declarado') && !panelVendedor.cierre && (
-                <PanelDeclaracion
-                  vendedorBsale={panelVendedor.bsaleUser}
-                  cierre={panelVendedor.cierre}
-                  sucursalId={sucursalSel}
-                  fecha={fecha}
-                  usuario={usuario}
-                  vendedorLocal={panelVendedor.bsaleUser ? (bsaleUserMap[String(panelVendedor.bsaleUser.bsale_user_id)] ?? null) : null}
-                  umbrales={umbrales}
-                  onGuardado={result => {
-                    setCierres(prev => {
-                      const existe = prev.find(c => c.id === result.id)
-                      if (existe) return prev.map(c => c.id === result.id ? { ...c, ...result } : c)
-                      return [...prev, result]
-                    })
-                    setPanelVendedor(null)
-                  }}
-                />
-              )}
-
-              {/* Panel corroboración admin */}
-              {esAdmin && panelVendedor.cierre && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-                  {/* BSALE del vendedor */}
-                  {panelVendedor.bsaleUser && (
-                    <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #1a2f4a 100%)', borderRadius: 10, padding: '12px 14px', color: '#fff' }}>
-                      <div style={{ fontSize: 10, opacity: 0.7, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Venta BSALE</div>
-                      <div style={{ fontSize: 20, fontWeight: 700 }}>{fmt(panelVendedor.bsaleUser.venta)}</div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                        {Object.entries(panelVendedor.bsaleUser.modalidades ?? {}).map(([medio, amt]) => (
-                          <span key={medio} style={{ fontSize: 10, background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>
-                            {medio.split(' ').slice(0, 2).join(' ')}: {fmt(Number(amt))}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Declaración del vendedor */}
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Lo que declaró</div>
-                    <div style={{ background: '#F9FAFB', borderRadius: 8, padding: '10px 12px' }}>
-                      {MEDIOS.map(med => (
-                        <div key={med.key} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 12 }}>
-                          <span style={{ color: '#6B7280' }}>{med.label}</span>
-                          <span>{fmt(Number(panelVendedor.cierre[med.key] ?? 0))}</span>
-                        </div>
-                      ))}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #E5E7EB', marginTop: 6, paddingTop: 6, fontWeight: 700, fontSize: 13 }}>
-                        <span>Total declarado</span>
-                        <span>{fmt(Number(panelVendedor.cierre.total_declarado ?? 0))}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Corroboración admin */}
-                  {panelVendedor.cierre.estado === 'declarado' && valoresCorrob && (
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Corroborar</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {MEDIOS.map(med => (
-                          <div key={med.key} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', alignItems: 'center', gap: 8 }}>
-                            <label style={{ ...labelSt, marginBottom: 0, fontSize: 11 }}>{med.label}</label>
-                            <MoneyInput value={valoresCorrob[`${med.key}_corrob`]}
-                              onChange={n => setValoresCorrob(p => ({ ...p, [`${med.key}_corrob`]: n }))} />
-                          </div>
-                        ))}
-                      </div>
-                      <div style={{ background: '#F9FAFB', borderRadius: 8, padding: '10px 12px', marginTop: 10, fontSize: 12 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span style={{ color: '#6B7280' }}>Total corroborado</span>
-                          <span style={{ fontWeight: 600 }}>{fmt(totalCorrobPanel)}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: '#6B7280' }}>Diferencia</span>
-                          <BrechaChip valor={diferenciaPanel} umbrales={umbrales} />
-                        </div>
-                      </div>
-                      <div style={{ marginTop: 10 }}>
-                        <label style={labelSt}>Observaciones admin {diferenciaPanel !== 0 && <span style={{ color: '#DC2626' }}>*</span>}</label>
-                        <textarea value={obsAdmin} onChange={e => setObsAdmin(e.target.value)} rows={2}
-                          placeholder={diferenciaPanel !== 0 ? 'Obligatorio: explica la diferencia' : 'Opcional'}
-                          style={{ ...inputSt, resize: 'none', fontFamily: 'inherit', borderColor: obsRequerida ? '#DC2626' : '#D1D5DB', maxHeight: 80 }} />
-                      </div>
-                    </div>
-                  )}
-
-                  {panelVendedor.cierre.estado !== 'declarado' && (
-                    <div style={{ textAlign: 'center', padding: 8 }}>
-                      {estadoBadge(panelVendedor.cierre.estado)}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Footer panel */}
-            <div style={{ padding: '12px 20px 70px 20px', borderTop: '1px solid #F3F4F6', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, flexShrink: 0, background: '#fff' }}>
-              <button onClick={() => setPanelVendedor(null)} style={btnOutlineSt}>Cerrar</button>
-              {esAdmin && panelVendedor.cierre?.estado === 'declarado' && valoresCorrob && (
-                <button onClick={handleCorrob} disabled={savingCorrob || obsRequerida}
-                  style={{ ...btnSt(), opacity: savingCorrob || obsRequerida ? 0.6 : 1 }}>
-                  {savingCorrob && <Loader2 size={13} />}
-                  Confirmar corroboración
-                </button>
-              )}
-            </div>
-          </aside>
+          </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Componente principal ──────────────────────────────────────────────────────
+export function DepositosAbonosTab({ usuario }) {
+  const now = new Date()
+  const [anio, setAnio] = useState(now.getFullYear())
+  const [mes, setMes] = useState(now.getMonth() + 1)
+  const [sucursales, setSucursales] = useState([])
+  const puedeElegirSuc = PUEDE_ESCRIBIR.includes(usuario.rol) || usuario.rol === 'gerencia'
+  const [sucursal, setSucursal] = useState(puedeElegirSuc ? 'all' : (usuario.sucursal_id ?? ''))
+  const [tabActivo, setTabActivo] = useState('efectivo')
+  const sucursalEf = sucursal === 'all' ? null : sucursal || null
+  const puedeEscribir = PUEDE_ESCRIBIR.includes(usuario.rol)
+  const { desde, hasta } = rangoMes(anio, mes)
+  const anios = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1]
+
+  useEffect(() => { fetchSucursales().then(setSucursales).catch(() => {}) }, [])
+
+  const tabs = [
+    { k: 'efectivo',  l: 'Depósitos efectivo', tipo: 'depositos_efectivo' },
+    { k: 'getnet',    l: 'Abonos Getnet',       tipo: 'abonos_getnet'     },
+    { k: 'importar',  l: '📤 Importar Getnet',  tipo: null                },
+    { k: 'webpay',    l: 'Abonos Webpay',       tipo: 'abonos_webpay'     },
+  ]
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Filtros — solo para tabs que no son importar */}
+      {tabActivo !== 'importar' && (
+        <div style={cardSt}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+            <div>
+              <label style={labelSt}>Año</label>
+              <select style={selectSt} value={String(anio)} onChange={e => setAnio(Number(e.target.value))}>
+                {anios.map(a => <option key={a} value={String(a)}>{a}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelSt}>Mes</label>
+              <select style={selectSt} value={String(mes)} onChange={e => setMes(Number(e.target.value))}>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                  <option key={m} value={String(m)}>{String(m).padStart(2, '0')}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={labelSt}>Sucursal</label>
+              <select style={selectSt} value={sucursal} disabled={!puedeElegirSuc} onChange={e => setSucursal(e.target.value)}>
+                {puedeElegirSuc && <option value="all">Todas</option>}
+                {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid #E5E7EB', overflowX: 'auto' }}>
+        {tabs.map(t => (
+          <button key={t.k} onClick={() => setTabActivo(t.k)} style={{
+            padding: '8px 16px', fontSize: 13, fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer',
+            color: tabActivo === t.k ? '#1F4E79' : '#6B7280',
+            borderBottom: tabActivo === t.k ? '2px solid #1F4E79' : '2px solid transparent',
+            whiteSpace: 'nowrap',
+          }}>{t.l}</button>
+        ))}
+      </div>
+
+      {/* Contenido */}
+      {tabActivo === 'importar' && <ImportadorGetnet />}
+      {tabs.filter(t => t.k === tabActivo && t.tipo).map(t => (
+        <SeccionDeposito key={t.k} tipo={t.tipo} titulo={t.l}
+          sucursalEf={sucursalEf} desde={desde} hasta={hasta}
+          puedeEscribir={puedeEscribir} sucursales={sucursales} />
+      ))}
     </div>
   )
 }
