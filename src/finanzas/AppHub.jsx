@@ -22,7 +22,7 @@ const APPS_CATALOG = {
   finanzas:  { l: "Sistema Financiero", desc: "Tesorería, conciliación, presupuesto y reportes",       ic: "💰", c: "#34C759", tabs: ["Dashboard","Conciliación","Tesorería","Presupuesto"] },
   admin:     { l: "Administración",     desc: "Usuarios, matriz de acceso y gestión del ERP",          ic: "🔑", c: "#1C1C1E", tabs: ["Usuarios","Accesos","Apps","Roles"] },
   logistica: { l: "Logística",          desc: "Despachos, retiros, devoluciones — próximamente",       ic: "🚚", c: "#FF9500", tabs: ["Próximamente"], soon: true },
-  postventa: { l: "Postventa",          desc: "Reclamos, NC, casos de cliente — próximamente",         ic: "🛠", c: "#AF52DE", tabs: ["Próximamente"], soon: true },
+  postventa: { l: "Postventa",          desc: "Reclamos, NC, casos y seguimiento de cliente",           ic: "🛠", c: "#AF52DE", tabs: ["Dashboard","Casos","Escalados","Finanzas"] },
   rrhh:      { l: "Gestión de Personas",desc: "Contratos, dotación, turnos — próximamente",            ic: "👥", c: "#FF3B30", tabs: ["Próximamente"], soon: true },
   comercial: { l: "Comercial",          desc: "Ventas, vendedores, comisiones — próximamente",          ic: "📈", c: "#5856D6", tabs: ["Próximamente"], soon: true }
 }

@@ -6,6 +6,7 @@ import autoTablePlugin from 'jspdf-autotable'
 import{FinanzasApp}from'./finanzas/FinanzasApp'
 import{AppHub}from'./finanzas/AppHub'
 import{AdminApp}from'./admin/AdminApp'
+import{PostventaApp}from'./postventa/PostventaApp'
 
 /* ═══ HELPERS ═══ */
 const fmt=n=>new Intl.NumberFormat("es-CL",{style:"currency",currency:"CLP",maximumFractionDigits:0}).format(n||0)
@@ -487,6 +488,7 @@ export default function App(){
   if(appActual==="finanzas")return<FinanzasApp cu={cu} setAppActual={v=>{setAppActual(v);try{if(v)localStorage.setItem("outlet_app_actual",v);else localStorage.removeItem("outlet_app_actual")}catch(e){}}}/>
 
   if(appActual==="admin")return<AdminApp cu={cu} setAppActual={v=>{setAppActual(v);try{if(v)localStorage.setItem("outlet_app_actual",v);else localStorage.removeItem("outlet_app_actual")}catch(e){}}}/>
+  if(appActual==="postventa")return<PostventaApp cu={cu} setAppActual={v=>{setAppActual(v);try{if(v)localStorage.setItem("outlet_app_actual",v);else localStorage.removeItem("outlet_app_actual")}catch(e){}}}/>
 
   const rd=rl(cu)
 
