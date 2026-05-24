@@ -312,7 +312,7 @@ export default function App(){
     return()=>window.removeEventListener("storage",onStorage)
   },[])
 
-  useEffect(()=>{loadAll()},[])
+  useEffect(()=>{loadUsers()},[])  // Solo carga usuarios para el login — loadAll se dispara post-auth
 
   // Persistencia de sesion via Supabase Auth (unico metodo valido desde v52)
   useEffect(()=>{
@@ -321,11 +321,17 @@ export default function App(){
         const s=await getSession()
         if(s?.user?.email&&users.length>0){
           const u=users.find(x=>x.correo?.toLowerCase()===s.user.email.toLowerCase())
-          if(u){setCu(u);return}
+          if(u){
+            setCu(u)
+            // Sesion Auth confirmada: cargar el resto de datos autenticados
+            await loadAll()
+            return
+          }
         }
-        // Limpiar cache legacy si existe
+        // Sin sesion valida: solo mostrar login, no cargar datos
+        setLoading(false)
         try{localStorage.removeItem("erp_cu_id")}catch(e){}
-      }catch(e){console.warn("restoreSession:",e)}
+      }catch(e){console.warn("restoreSession:",e);setLoading(false)}
     }
     if(users.length>0&&!cu)restoreSession()
     // Listener de cambios de auth (logout automático si el token expira)
@@ -337,10 +343,25 @@ export default function App(){
   },[users])
 
 
+  // loadUsers: carga solo usuarios y sucursales (necesario antes del login, usa anon)
+  // Al terminar, restoreSession detecta si hay sesion Auth y decide si disparar loadAll
+  const loadUsers=async()=>{
+    try{
+      const[ru,rsuc]=await Promise.all([
+        supabase.from('usuarios').select('*').eq('activo',true).order('nombre'),
+        supabase.from('sucursales').select('*').order('orden'),
+      ])
+      setUsers(ru.data||[])
+      setSucursales(rsuc.data||[])
+      // Si no hay sesion Auth, restoreSession llamara setLoading(false)
+      // Si la sesion ya se proceso antes de loadUsers, liberar loading aqui
+    }catch(e){console.warn('loadUsers:',e);setLoading(false)}
+  }
+
+  // loadAll: carga el resto de tablas — solo se llama cuando hay sesion Auth confirmada
   const loadAll=async()=>{
     try{
-      const[ru,rp,rprod,roc,rf,rpag,rpt,rpa,rcfg,rsuc]=await Promise.all([
-        supabase.from('usuarios').select('*').eq('activo',true).order('nombre'),
+      const[rp,rprod,roc,rf,rpag,rpt,rpa,rcfg]=await Promise.all([
         supabase.from('proveedores').select('*').order('nombre'),
         fetchAll(supabase.from('productos').select('*').order('costo_reposicion',{ascending:false})),
         supabase.from('ordenes_compra').select('*').order('created_at',{ascending:false}),
@@ -349,13 +370,10 @@ export default function App(){
         supabase.from('parametros_tipo').select('*'),
         supabase.from('parametros_abcd').select('*'),
         supabase.from('config_sistema').select('*'),
-        supabase.from('sucursales').select('*').order('orden'),
       ])
-      if(ru.error)throw ru.error
-      setUsers(ru.data||[]);setProvs(rp.data||[]);setProds(rprod.data||[])
+      setProvs(rp.data||[]);setProds(rprod.data||[])
       setOcs(roc.data||[]);setFirmas(rf.data||[]);setPagos(rpag.data||[])
       setParams(rpt.data||[]);setParamsABCD(rpa.data||[])
-      setSucursales(rsuc.data||[])
       const cfgMap={};(rcfg.data||[]).forEach(c=>cfgMap[c.clave]=c.valor);setConfig(cfgMap)
       // Stock en tránsito
       try{const st=await supabase.from('stock_transito').select('*');setStockTransito(st.data||[])}catch(e){}
@@ -462,7 +480,7 @@ export default function App(){
   if(loading)return<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#F2F2F7"}}><div style={{textAlign:"center"}}><div style={{fontSize:32,marginBottom:8}}>📦</div><div style={{fontSize:18,fontWeight:700,color:"#1C1C1E"}}>Outlet de Puertas</div><div style={{fontSize:13,color:"#8E8E93",marginTop:4}}>Conectando...</div></div></div>
 
   if(recoveryMode)return<CambiarPasswordScreen onDone={()=>setRecoveryMode(false)}/>
-  if(!cu)return<LoginScreen onLogin={setCu} users={users}/>
+  if(!cu)return<LoginScreen onLogin={async(u)=>{setCu(u);await loadAll()}} users={users}/>
 
   if(cu&&!appActual)return<AppHub cu={cu} onSelect={v=>{setAppActual(v);try{localStorage.setItem("outlet_app_actual",v)}catch(e){}}} onLogout={async()=>{try{await signOut()}catch(e){}try{localStorage.removeItem("erp_cu_id")}catch(e){}try{localStorage.removeItem("outlet_app_actual")}catch(e){}setCu(null);setAppActual(null)}}/>
 
