@@ -40,6 +40,12 @@ export function AppHub({ cu, onSelect, onLogout }) {
   const r = rl(cu)
   const [appsDisp, setAppsDisp] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showCambioPass, setShowCambioPass] = useState(false)
+  const [pass, setPass] = useState("")
+  const [pass2, setPass2] = useState("")
+  const [passLoading, setPassLoading] = useState(false)
+  const [passErr, setPassErr] = useState("")
+  const [passOk, setPassOk] = useState(false)
 
   // Carga apps disponibles desde la matriz (con fallback legado)
   useEffect(() => {
@@ -72,6 +78,20 @@ export function AppHub({ cu, onSelect, onLogout }) {
     cargar()
     return () => { cancel = true }
   }, [cu.id, cu.rol])
+
+  const guardarPassword = async () => {
+    if (pass.length < 8) { setPassErr('Minimo 8 caracteres'); return }
+    if (pass !== pass2) { setPassErr('Las contrasenas no coinciden'); return }
+    setPassLoading(true); setPassErr('')
+    const { error } = await supabase.auth.updateUser({ password: pass })
+    setPassLoading(false)
+    if (error) { setPassErr('Error: ' + error.message); return }
+    setPassOk(true)
+    setTimeout(() => {
+      setShowCambioPass(false)
+      setPass(''); setPass2(''); setPassErr(''); setPassOk(false)
+    }, 2000)
+  }
 
   // Auto-seleccionar si solo hay 1 app
   useEffect(() => {
@@ -201,21 +221,57 @@ export function AppHub({ cu, onSelect, onLogout }) {
       </div>
 
       {/* Logout */}
-      <button
-        onClick={handleLogout}
-        style={{
-          marginTop: 32,
-          padding: "10px 20px",
-          background: "transparent",
-          border: "1px solid #E5E5EA",
-          borderRadius: 10,
-          fontSize: 13,
-          color: "#8E8E93",
-          cursor: "pointer"
-        }}
-      >
-        Cerrar sesión
-      </button>
+      {/* Acciones footer */}
+      <div style={{ marginTop: 32, display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+        <button onClick={() => { setShowCambioPass(true); setPass(""); setPass2(""); setPassErr(""); setPassOk(false) }} style={{ padding: "10px 20px", background: "transparent", border: "1px solid #E5E5EA", borderRadius: 10, fontSize: 13, color: "#3A3A3C", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+          <span>🔑</span> Cambiar contraseña
+        </button>
+        <button onClick={handleLogout} style={{ padding: "10px 20px", background: "transparent", border: "1px solid #E5E5EA", borderRadius: 10, fontSize: 13, color: "#8E8E93", cursor: "pointer" }}>
+          Cerrar sesión
+        </button>
+      </div>
+
+      {/* Modal cambio de password */}
+      {showCambioPass && (
+        <div onClick={() => setShowCambioPass(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 420, boxShadow: "0 25px 60px rgba(0,0,0,0.3)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 19, fontWeight: 700, color: "#1C1C1E" }}>Cambiar contraseña</div>
+                <div style={{ fontSize: 12, color: "#8E8E93", marginTop: 2 }}>{cu.correo}</div>
+              </div>
+              <button onClick={() => setShowCambioPass(false)} style={{ width: 32, height: 32, borderRadius: 16, background: "#F2F2F7", border: "none", cursor: "pointer", fontSize: 14 }}>×</button>
+            </div>
+            {passOk ? (
+              <div style={{ textAlign: "center", padding: "20px 0" }}>
+                <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#34C759" }}>Contraseña actualizada</div>
+              </div>
+            ) : (
+              <>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#3A3A3C", marginBottom: 6 }}>Nueva contraseña</label>
+                  <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Mínimo 8 caracteres" style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: "1px solid #E5E5EA", fontSize: 14, outline: "none", boxSizing: "border-box" }} autoFocus />
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#3A3A3C", marginBottom: 6 }}>Confirmar contraseña</label>
+                  <input type="password" value={pass2} onChange={e => setPass2(e.target.value)} placeholder="Repite la contraseña" style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: "1px solid #E5E5EA", fontSize: 14, outline: "none", boxSizing: "border-box" }} onKeyDown={e => e.key === "Enter" && guardarPassword()} />
+                </div>
+                {pass.length > 0 && pass2.length > 0 && pass === pass2 && (
+                  <div style={{ color: "#34C759", fontSize: 12, marginBottom: 10 }}>✓ Las contraseñas coinciden</div>
+                )}
+                {passErr && (
+                  <div style={{ color: "#FF3B30", fontSize: 13, marginBottom: 12, padding: "10px 14px", background: "#FF3B3008", borderRadius: 10, border: "1px solid #FF3B3020" }}>{passErr}</div>
+                )}
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+                  <button onClick={() => setShowCambioPass(false)} style={{ padding: "10px 18px", borderRadius: 10, background: "#F2F2F7", color: "#3A3A3C", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancelar</button>
+                  <button disabled={!pass || !pass2 || passLoading} onClick={guardarPassword} style={{ padding: "10px 18px", borderRadius: 10, background: (!pass || !pass2 || passLoading) ? "#8E8E93" : "#1C1C1E", color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: (!pass || !pass2 || passLoading) ? "default" : "pointer" }}>{passLoading ? "Guardando..." : "Guardar"}</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
