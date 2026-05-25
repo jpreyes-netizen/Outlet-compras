@@ -368,16 +368,15 @@ export function CierreDelDiaTab({ usuario }) {
     } finally { setLoadingCierres(false) }
   }, [fecha, sucursalSel, esAdmin, usuario.id])
 
-  // Cargar usuarios cajero de la sucursal seleccionada (para mapear bsale_user_id → usuario.id real)
+  // Cargar todos los usuarios activos para mapear nombre BSALE → usuario.id real
+  // No filtramos por sucursal porque admins/directores pueden tener sucursal_id = null
   useEffect(() => {
-    if (!sucursalSel) return
     supabase.from('usuarios')
       .select('id, nombre, rol, sucursal_id')
-      .eq('sucursal_id', sucursalSel)
       .eq('activo', true)
       .then(({ data }) => setUsersSucursal(data || []))
       .catch(() => setUsersSucursal([]))
-  }, [sucursalSel])
+  }, [])
 
   useEffect(() => {
     cargarBsale()
