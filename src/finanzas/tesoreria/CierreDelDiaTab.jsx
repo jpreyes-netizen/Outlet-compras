@@ -443,8 +443,8 @@ export function CierreDelDiaTab({ usuario }) {
 
       {/* ── Filtros ── */}
       <div style={cardSt}>
-        <div style={{ display: 'grid', gridTemplateColumns: esAdmin ? '1fr 1fr auto auto' : '1fr auto auto', gap: 12, alignItems: 'flex-end' }}>
-          {esAdmin && (
+        <div style={{ display: 'grid', gridTemplateColumns: (esAdmin || puedeCorroborar) ? '1fr 1fr auto auto' : '1fr auto auto', gap: 12, alignItems: 'flex-end' }}>
+          {(esAdmin || puedeCorroborar) && (
             <div>
               <label style={labelSt}>Sucursal</label>
               <select style={{...selectSt, opacity: sucursalForzada ? 0.6 : 1}} value={sucursalSel} onChange={e => !sucursalForzada && setSucursalSel(e.target.value)} disabled={!!sucursalForzada}>
@@ -593,7 +593,7 @@ export function CierreDelDiaTab({ usuario }) {
                     </td>
                     <td style={{ padding: '10px 14px' }}>
                       <span style={{ fontSize: 12, color: '#4F46E5', fontWeight: 500 }}>
-                        {cierre?.estado === 'declarado' ? 'Corroborar →' : cierre ? 'Ver →' : esAdmin ? 'Ver →' : 'Declarar →'}
+                        {cierre?.estado === 'declarado' ? 'Corroborar →' : cierre ? 'Ver →' : (esAdmin || puedeCorroborar) ? 'Ver →' : 'Declarar →'}
                       </span>
                     </td>
                   </tr>
@@ -631,7 +631,7 @@ export function CierreDelDiaTab({ usuario }) {
             <div style={{ flex: 1, padding: '16px 20px', overflowY: 'auto' }}>
 
               {/* Si es el propio vendedor o no hay cierre → panel declaración */}
-              {(!esAdmin || !panelVendedor.cierre || panelVendedor.cierre.estado === 'declarado') && !panelVendedor.cierre && (
+              {(!esAdmin && !puedeCorroborar) && !panelVendedor.cierre && (
                 <PanelDeclaracion
                   vendedorBsale={panelVendedor.bsaleUser}
                   cierre={panelVendedor.cierre}
@@ -651,7 +651,7 @@ export function CierreDelDiaTab({ usuario }) {
               )}
 
               {/* Panel corroboración admin */}
-              {esAdmin && panelVendedor.cierre && (
+              {(esAdmin || puedeCorroborar) && panelVendedor.cierre && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
                   {/* BSALE del vendedor */}
@@ -730,7 +730,7 @@ export function CierreDelDiaTab({ usuario }) {
             {/* Footer panel */}
             <div style={{ padding: '12px 20px', borderTop: '1px solid #F3F4F6', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button onClick={() => setPanelVendedor(null)} style={btnOutlineSt}>Cerrar</button>
-              {esAdmin && panelVendedor.cierre?.estado === 'declarado' && valoresCorrob && (
+              {(esAdmin || puedeCorroborar) && panelVendedor.cierre?.estado === 'declarado' && valoresCorrob && (
                 <button onClick={handleCorrob} disabled={savingCorrob || obsRequerida}
                   style={{ ...btnSt(), opacity: savingCorrob || obsRequerida ? 0.6 : 1 }}>
                   {savingCorrob && <Loader2 size={13} />}
