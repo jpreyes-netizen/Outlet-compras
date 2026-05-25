@@ -84,7 +84,7 @@ async function fetchBsaleDia(fecha, sucursal_id, forzar = false) {
 }
 
 // ── Panel declaración de un vendedor ───────────────────────────────────────
-function PanelDeclaracion({ vendedorBsale, cierre, sucursalId, fecha, usuario, umbrales, onGuardado }) {
+function PanelDeclaracion({ vendedorBsale, cierre, sucursalId, fecha, usuario, umbrales, onGuardado, vendedorReal }) {
   const [valores, setValores] = useState(() => {
     if (cierre) return MEDIOS.reduce((a, m) => ({ ...a, [m.key]: Number(cierre[m.key] ?? 0) }), {})
     return MEDIOS.reduce((a, m) => ({ ...a, [m.key]: 0 }), {})
@@ -107,7 +107,7 @@ function PanelDeclaracion({ vendedorBsale, cierre, sucursalId, fecha, usuario, u
     setSaving(true)
     try {
       const payload = {
-        fecha, sucursal_id: sucursalId, vendedor_id: usuario.id,
+        fecha, sucursal_id: sucursalId, vendedor_id: (vendedorReal?.id || usuario.id),
         observaciones_vendedor: obs.trim() || null,
         venta_bsale_api: recaudBsale,
         ...valores
@@ -313,6 +313,7 @@ export function CierreDelDiaTab({ usuario }) {
 
   // Panel lateral
   const [panelVendedor, setPanelVendedor] = useState(null) // { bsaleUser, cierre }
+  const [usersSucursal, setUsersSucursal] = useState([]) // usuarios de la sucursal con bsale_vendedor_id
   const [savingCorrob, setSavingCorrob] = useState(false)
   const [valoresCorrob, setValoresCorrob] = useState(null)
   const [obsAdmin, setObsAdmin] = useState('')
@@ -366,6 +367,17 @@ export function CierreDelDiaTab({ usuario }) {
       toast.error('Error al cargar cierres')
     } finally { setLoadingCierres(false) }
   }, [fecha, sucursalSel, esAdmin, usuario.id])
+
+  // Cargar usuarios cajero de la sucursal seleccionada (para mapear bsale_user_id → usuario.id real)
+  useEffect(() => {
+    if (!sucursalSel) return
+    supabase.from('usuarios')
+      .select('id, nombre, rol, sucursal_id')
+      .eq('sucursal_id', sucursalSel)
+      .eq('activo', true)
+      .then(({ data }) => setUsersSucursal(data || []))
+      .catch(() => setUsersSucursal([]))
+  }, [sucursalSel])
 
   useEffect(() => {
     cargarBsale()
@@ -630,33 +642,21 @@ export function CierreDelDiaTab({ usuario }) {
 
             <div style={{ flex: 1, padding: '16px 20px', overflowY: 'auto' }}>
 
-              {/* Si es admin/corroborador y no hay cierre → mensaje informativo */}
-              {(esAdmin || puedeCorroborar) && !panelVendedor.cierre && (
-                <div style={{
-                  padding: '40px 20px', textAlign: 'center',
-                  background: '#FAFAFC', borderRadius: 10,
-                  border: '1px dashed #D1D5DB',
-                  color: '#6B7280'
-                }}>
-                  <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#4B5563', marginBottom: 4 }}>
-                    Sin cierre declarado
-                  </div>
-                  <div style={{ fontSize: 12, color: '#6B7280' }}>
-                    Este vendedor aún no ha declarado su cierre del día.<br/>
-                    Una vez declarado, podrás corroborarlo aquí.
-                  </div>
-                </div>
-              )}
-
-              {/* Si es el propio vendedor o no hay cierre → panel declaración */}
-              {(!esAdmin && !puedeCorroborar) && !panelVendedor.cierre && (
+              {/* Si no hay cierre → panel declaración (admin/corroborador en nombre del vendedor, cajero su propio cierre) */}
+              {!panelVendedor.cierre && (
                 <PanelDeclaracion
                   vendedorBsale={panelVendedor.bsaleUser}
                   cierre={panelVendedor.cierre}
                   sucursalId={sucursalSel}
                   fecha={fecha}
                   usuario={usuario}
+                  vendedorReal={
+                    panelVendedor.bsaleUser
+                      ? usersSucursal.find(u =>
+                          (u.nombre || '').toUpperCase() === (panelVendedor.bsaleUser.nombre || '').toUpperCase()
+                        )
+                      : null
+                  }
                   umbrales={umbrales}
                   onGuardado={result => {
                     setCierres(prev => {
