@@ -5840,7 +5840,8 @@ const ModuloFinanzas = ({casos, cu, onRefresh, onVerCaso}) => {
       const caso = casos.find(c => c.id === f3.caso_id)
       if (!caso) return
       const f4 = f4Map[f3.caso_id]
-      if (f4?.transfer_ejecutada) ejec.push({caso, form3:f3, form4:f4})
+      // transfer_ejecutada no existe en schema actual — se infiere del estado del caso
+      if (caso?.estado === 'cerrado' && f4) ejec.push({caso, form3:f3, form4:f4})
       else pend.push({caso, form3:f3})
     })
 
