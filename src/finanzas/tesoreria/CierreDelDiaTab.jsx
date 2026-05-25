@@ -623,7 +623,7 @@ export function CierreDelDiaTab({ usuario }) {
           <aside style={{
             width: 520, maxWidth: '100%', height: '100%', background: '#fff',
             display: 'flex', flexDirection: 'column',
-            boxShadow: '-4px 0 32px rgba(0,0,0,0.15)', overflowY: 'auto'
+            boxShadow: '-4px 0 32px rgba(0,0,0,0.15)', overflow: 'hidden'
           }}>
 
             {/* Header panel */}
@@ -640,7 +640,7 @@ export function CierreDelDiaTab({ usuario }) {
               </button>
             </div>
 
-            <div style={{ flex: 1, padding: '16px 20px calc(120px + env(safe-area-inset-bottom)) 20px', overflowY: 'auto' }}>
+            <div style={{ flex: 1, padding: '16px 20px', overflowY: 'auto', minHeight: 0 }}>
 
               {/* Si no hay cierre → panel declaración (admin/corroborador en nombre del vendedor, cajero su propio cierre) */}
               {!panelVendedor.cierre && (
@@ -755,7 +755,7 @@ export function CierreDelDiaTab({ usuario }) {
             </div>
 
             {/* Footer panel */}
-            <div style={{ padding: '12px 20px', borderTop: '1px solid #F3F4F6', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <div style={{ padding: '12px 20px calc(12px + env(safe-area-inset-bottom)) 20px', borderTop: '1px solid #F3F4F6', display: 'flex', justifyContent: 'flex-end', gap: 8, flexShrink: 0, background: '#fff' }}>
               <button onClick={() => setPanelVendedor(null)} style={btnOutlineSt}>Cerrar</button>
               {(esAdmin || puedeCorroborar) && panelVendedor.cierre?.estado === 'declarado' && valoresCorrob && (
                 <button onClick={handleCorrob} disabled={savingCorrob || obsRequerida}
