@@ -522,7 +522,7 @@ export default function App(){
 
   const rd=rl(cu)
 
-  return<div style={{fontFamily:"-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif",margin:0,padding:isMobile?"0 10px 90px":"0 20px 100px",background:"#F2F2F7",minHeight:"100vh",fontSize:14}}>
+  return<div style={{fontFamily:"-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif",margin:0,padding:isMobile?"0 10px calc(90px + env(safe-area-inset-bottom))":"0 20px calc(100px + env(safe-area-inset-bottom))",background:"#F2F2F7",minHeight:"100vh",fontSize:14}}>
     <style>{`@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}*{box-sizing:border-box;margin:0;padding:0}body{background:#F2F2F7;overflow-x:hidden}input:focus,select:focus,textarea:focus{border-color:#007AFF!important;box-shadow:0 0 0 3px rgba(0,122,255,0.1)}::selection{background:#007AFF;color:#fff}::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track{background:#F2F2F7;border-radius:5px}::-webkit-scrollbar-thumb{background:#C7C7CC;border-radius:5px;border:2px solid #F2F2F7}::-webkit-scrollbar-thumb:hover{background:#8E8E93}table{font-size:13px}th,td{white-space:nowrap}
     /* === Mobile styles (v51) === */
     @media (max-width:767px){

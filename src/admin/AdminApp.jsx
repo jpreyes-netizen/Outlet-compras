@@ -126,7 +126,7 @@ export function AdminApp({ cu, setAppActual }) {
     <div style={{
       fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif",
       margin: 0,
-      padding: isMobile ? "0 10px 90px" : "0 20px 100px",
+      padding: isMobile ? "0 10px calc(90px + env(safe-area-inset-bottom))" : "0 20px calc(100px + env(safe-area-inset-bottom))",
       background: "var(--bg-hover)",
       minHeight: "100vh",
       fontSize: 14

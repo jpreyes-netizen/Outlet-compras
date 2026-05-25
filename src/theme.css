@@ -100,6 +100,21 @@
   /* ── TRANSICIONES ────────────────────────────────────────────────────── */
   --transition-fast: 0.15s ease;
   --transition-base: 0.2s ease;
+
+  /* ── SAFE AREAS (iOS notch, Android nav bars) ────────────────────────── */
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left:   env(safe-area-inset-left, 0px);
+  --safe-right:  env(safe-area-inset-right, 0px);
+
+  /* ── BREAKPOINTS (referencia para JS) ────────────────────────────────── */
+  --bp-xs: 480px;
+  --bp-sm: 768px;
+  --bp-md: 1024px;
+  --bp-lg: 1280px;
+
+  /* ── TAMAÑOS TÁCTILES MÍNIMOS (Apple HIG: 44pt / Material: 48dp) ─────── */
+  --touch-target-min: 44px;
 }
 
 /* ── ESTILOS GLOBALES BASE ─────────────────────────────────────────────── */
@@ -118,4 +133,44 @@ textarea:focus-visible,
 button:focus-visible {
   outline: none;
   box-shadow: var(--shadow-focus);
+}
+
+/* ═══ REGLAS GLOBALES MOBILE-FRIENDLY ════════════════════════════════════ */
+
+/* En móvil, reducir tamaño base ligeramente */
+@media (max-width: 480px) {
+  body { font-size: 14px; }
+}
+
+/* Prevenir zoom no deseado en iOS al hacer focus en inputs (font-size >= 16px) */
+@media (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Touch-friendly: botones e inputs cumplen mínimo táctil */
+button, .btn, input[type="button"], input[type="submit"] {
+  min-height: var(--touch-target-min);
+}
+
+/* Excepción: botones explícitamente marcados como pequeños */
+button.btn-sm, .btn-sm {
+  min-height: 32px;
+}
+
+/* Scroll suave en iOS */
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Tap highlight personalizado (no el gris feo del browser) */
+* {
+  -webkit-tap-highlight-color: rgba(79, 70, 229, 0.1);
+}
+
+/* Permitir selección de texto en cards (a veces se desactiva accidentalmente) */
+body {
+  -webkit-user-select: auto;
+  user-select: auto;
 }
