@@ -640,7 +640,7 @@ export function CierreDelDiaTab({ usuario }) {
               </button>
             </div>
 
-            <div style={{ flex: 1, padding: '16px 20px', overflowY: 'auto' }}>
+            <div style={{ flex: 1, padding: '16px 20px calc(120px + env(safe-area-inset-bottom)) 20px', overflowY: 'auto' }}>
 
               {/* Si no hay cierre → panel declaración (admin/corroborador en nombre del vendedor, cajero su propio cierre) */}
               {!panelVendedor.cierre && (
@@ -718,6 +718,14 @@ export function CierreDelDiaTab({ usuario }) {
                           </div>
                         ))}
                       </div>
+                      {/* Subtotal Getnet (Crédito + Débito) — referencia */}
+                      <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '8px 12px', marginTop: 8, fontSize: 12, display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#065F46', fontWeight: 500 }}>💳 Total Getnet (Cred + Déb)</span>
+                        <span style={{ fontWeight: 700, color: '#065F46' }}>
+                          {fmt(Number(valoresCorrob.t_credito_corrob ?? 0) + Number(valoresCorrob.t_debito_corrob ?? 0))}
+                        </span>
+                      </div>
+
                       <div style={{ background: '#F9FAFB', borderRadius: 8, padding: '10px 12px', marginTop: 10, fontSize: 12 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                           <span style={{ color: '#6B7280' }}>Total corroborado</span>
