@@ -17,12 +17,15 @@ const rl = u => ROLES.find(r => r.k === u?.rol) || ROLES[5]
 
 /* ═══ FINANZAS APP — Componente raíz del sistema financiero ═══ */
 
-const FIN_TABS = [
-  { k: "dashboard",    l: "Dashboard",    ic: "📊" },
-  { k: "conciliacion", l: "Conciliación", ic: "🔄" },
-  { k: "tesoreria",    l: "Tesorería",    ic: "💵" },
-  { k: "presupuesto",  l: "Presupuesto",  ic: "📈" }
+const ALL_FIN_TABS = [
+  { k: "dashboard",    l: "Dashboard",    ic: "📊", roles: ["admin","dir_general","dir_finanzas","tesorero","lector"] },
+  { k: "conciliacion", l: "Conciliación", ic: "🔄", roles: ["admin","dir_general","dir_finanzas","tesorero"] },
+  { k: "tesoreria",    l: "Tesorería",    ic: "💵", roles: ["admin","dir_general","dir_finanzas","tesorero","cajero"] },
+  { k: "presupuesto",  l: "Presupuesto",  ic: "📈", roles: ["admin","dir_general","dir_finanzas","tesorero","lector"] }
 ]
+const getFinTabs = (rol) => ALL_FIN_TABS.filter(t =>
+  t.roles.includes(rol) || rol === "admin"
+)
 
 export function FinanzasApp({ cu, setAppActual }) {
   const [tab, setTab] = useState(() => {
@@ -43,6 +46,10 @@ export function FinanzasApp({ cu, setAppActual }) {
   }, [tab])
 
   const r = rl(cu)
+  const finTabs = getFinTabs(cu?.rol || "")
+
+  // Si el tab actual no está disponible para este rol, ir al primero disponible
+  const tabValido = finTabs.find(t => t.k === tab) ? tab : (finTabs[0]?.k || "tesoreria")
 
   const cambiarApp = () => {
     localStorage.removeItem("outlet_app_actual")
@@ -140,10 +147,10 @@ export function FinanzasApp({ cu, setAppActual }) {
       </div>
 
       {/* CONTENT */}
-      {tab === "dashboard" && <FinDashboard cu={cu} isMobile={isMobile} />}
-      {tab === "conciliacion" && <FinConciliacion cu={cu} isMobile={isMobile} />}
-      {tab === "tesoreria" && <FinTesoreria cu={cu} isMobile={isMobile} />}
-      {tab === "presupuesto" && <FinPresupuesto cu={cu} isMobile={isMobile} />}
+      {tabValido === "dashboard" && <FinDashboard cu={cu} isMobile={isMobile} />}
+      {tabValido === "conciliacion" && <FinConciliacion cu={cu} isMobile={isMobile} />}
+      {tabValido === "tesoreria" && <FinTesoreria cu={cu} isMobile={isMobile} rol={cu?.rol} />}
+      {tabValido === "presupuesto" && <FinPresupuesto cu={cu} isMobile={isMobile} />}
 
       {/* TOASTER */}
       <Toaster richColors position="top-right" />
@@ -157,7 +164,7 @@ export function FinanzasApp({ cu, setAppActual }) {
         padding: "8px 0 env(safe-area-inset-bottom,8px)", zIndex: 50
       }}>
         <div style={{ display: "flex", gap: 0, maxWidth: 700, width: "100%" }}>
-          {FIN_TABS.map(t => (
+          {finTabs.map(t => (
             <button
               key={t.k}
               onClick={() => setTab(t.k)}

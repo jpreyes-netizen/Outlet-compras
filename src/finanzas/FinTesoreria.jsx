@@ -5,14 +5,16 @@ import { DepositosAbonosTab } from './tesoreria/DepositosAbonosTab'
 import { AnalisisTab } from './tesoreria/AnalisisTab'
 import { CartolaBancariaTab } from './tesoreria/CartolaBancariaTab'
 
-const TABS = [
-  { k: 'cierre',    l: 'Cierre del día' },
-  { k: 'depositos', l: 'Depósitos y abonos' },
-  { k: 'cartola',   l: 'Cartola bancaria' },
-  { k: 'analisis',  l: 'Análisis' },
+const ALL_TABS = [
+  { k: 'cierre',    l: 'Cierre del día',    roles: ['admin','dir_general','dir_finanzas','tesorero','cajero'] },
+  { k: 'depositos', l: 'Depósitos y abonos', roles: ['admin','dir_general','dir_finanzas','tesorero','cajero'] },
+  { k: 'cartola',   l: 'Cartola bancaria',   roles: ['admin','dir_general','dir_finanzas','tesorero'] },
+  { k: 'analisis',  l: 'Análisis',           roles: ['admin','dir_general','dir_finanzas','tesorero'] },
 ]
 
-export function FinTesoreria({ cu, isMobile }) {
+export function FinTesoreria({ cu, isMobile, rol }) {
+  const rolActual = rol || cu?.rol || 'cajero'
+  const TABS = ALL_TABS.filter(t => t.roles.includes(rolActual) || rolActual === 'admin')
   const [tab, setTab] = useState('cierre')
   const [usuario, setUsuario] = useState(null)
   const [loading, setLoading] = useState(true)
