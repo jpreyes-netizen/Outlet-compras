@@ -149,3 +149,129 @@ export function canInSync(usuario, appCodigo, permiso) {
   if (!rolLegado) return false
   return rolLegado.permisos.includes('todo') || rolLegado.permisos.includes(permiso)
 }
+
+// ─── NUEVOS HELPERS RBAC — Fase RBAC-3 ───────────────────────────────────────
+// Lee capabilities desde rol_capabilities en vez de permisos jsonb legacy
+// Compatibles con el sistema anterior — no rompen nada existente
+
+// Cache de capabilities por usuario
+let _capCache = {}  // { userId: { caps: Set, scopes: Map, cargado: bool } }
+
+export function clearCapCache() {
+  _capCache = {}
+}
+
+// Carga capabilities del usuario para una app específica
+// Retorna { caps: Set<capability_id>, scopes: Map<capability_id, scope_filter> }
+async function cargarCaps(usuario, appCodigo) {
+  const cacheKey = usuario?.id + ':' + appCodigo
+  if (_capCache[cacheKey]?.cargado) return _capCache[cacheKey]
+
+  try {
+    // 1. Obtener rol_id del usuario en esta app
+    const { data: acceso } = await supabase
+      .from('usuario_acceso')
+      .select('rol_id, sucursal_id')
+      .eq('usuario_id', usuario.id)
+      .eq('app_codigo', appCodigo)
+      .eq('activo', true)
+      .maybeSingle()
+
+    if (!acceso?.rol_id) {
+      _capCache[cacheKey] = { cargado: true, caps: new Set(), scopes: new Map(), sucursal_id: null }
+      return _capCache[cacheKey]
+    }
+
+    // 2. Obtener capabilities de ese rol
+    const { data: rolCaps } = await supabase
+      .from('rol_capabilities')
+      .select('capability_id, scope_filter')
+      .eq('rol_id', acceso.rol_id)
+
+    const caps = new Set((rolCaps || []).map(rc => rc.capability_id))
+    const scopes = new Map((rolCaps || []).map(rc => [rc.capability_id, rc.scope_filter]))
+
+    _capCache[cacheKey] = {
+      cargado: true,
+      caps,
+      scopes,
+      sucursal_id: acceso.sucursal_id,
+      rol_id: acceso.rol_id
+    }
+    return _capCache[cacheKey]
+
+  } catch(e) {
+    _capCache[cacheKey] = { cargado: true, caps: new Set(), scopes: new Map(), sucursal_id: null }
+    return _capCache[cacheKey]
+  }
+}
+
+// ¿El usuario tiene esta capability en esta app?
+// can(usuario, 'finanzas', 'fin.teso.cierre') → false | 'all' | 'sucursal' | 'propio'
+export async function can(usuario, appCodigo, capabilityId) {
+  // Admin siempre puede todo
+  if (usuario?.rol === 'admin') return 'all'
+
+  const { caps, scopes } = await cargarCaps(usuario, appCodigo)
+
+  // Verificar capability específica
+  if (caps.has(capabilityId)) {
+    return scopes.get(capabilityId) || 'all'
+  }
+
+  // Verificar si tiene admin_total de la app
+  const adminCap = appCodigo + '.admin'
+  if (caps.has(adminCap)) return 'all'
+
+  return false
+}
+
+// Versión síncrona — usa cache precargado
+// canSync(usuario, 'finanzas', 'fin.teso.cierre') → false | 'all' | 'sucursal'
+export function canSync(usuario, appCodigo, capabilityId) {
+  if (usuario?.rol === 'admin') return 'all'
+  const cacheKey = usuario?.id + ':' + appCodigo
+  const cached = _capCache[cacheKey]
+  if (!cached?.cargado) return false
+  if (cached.caps.has(capabilityId)) return cached.scopes.get(capabilityId) || 'all'
+  if (cached.caps.has(appCodigo + '.admin')) return 'all'
+  return false
+}
+
+// Precargar capabilities de un usuario para una app (llamar al iniciar cada app)
+// Permite usar canSync() en el render sin awaits
+export async function preloadCaps(usuario, appCodigo) {
+  return await cargarCaps(usuario, appCodigo)
+}
+
+// ¿A qué sucursal está limitado el usuario para una capability específica?
+// userScope(usuario, 'finanzas', 'fin.teso.cierre') → null (todas) | 'suc-lg'
+export async function userScope(usuario, appCodigo, capabilityId) {
+  if (usuario?.rol === 'admin') return null  // admin ve todo
+
+  const cached = await cargarCaps(usuario, appCodigo)
+  const scope = cached.scopes.get(capabilityId)
+
+  if (scope === 'sucursal') {
+    // Retorna sucursal_id del usuario (de usuario_acceso o de usuarios)
+    return cached.sucursal_id || usuario?.sucursal_id || null
+  }
+  return null  // null = sin filtro de sucursal
+}
+
+// Versión síncrona de userScope
+export function userScopeSync(usuario, appCodigo, capabilityId) {
+  if (usuario?.rol === 'admin') return null
+  const cacheKey = usuario?.id + ':' + appCodigo
+  const cached = _capCache[cacheKey]
+  if (!cached?.cargado) return null
+  const scope = cached.scopes.get(capabilityId)
+  if (scope === 'sucursal') return cached.sucursal_id || usuario?.sucursal_id || null
+  return null
+}
+
+// Precargar capabilities de múltiples apps a la vez (para el AppHub)
+export async function preloadAllCaps(usuario) {
+  const apps = ['compras', 'finanzas', 'postventa', 'admin']
+  await Promise.all(apps.map(app => cargarCaps(usuario, app)))
+}
