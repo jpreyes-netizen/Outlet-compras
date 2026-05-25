@@ -16,6 +16,22 @@ const ROLES_LEGADO = [
 
 const rolInfo = k => ROLES_LEGADO.find(r => r.k === k) || { k, l: k, c: "#8E8E93" }
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+async function adminAction(accion, payload) {
+  const res = await fetch(SUPABASE_URL + '/functions/v1/admin-actions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+      'apikey': SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ accion, ...payload })
+  })
+  return res.json()
+}
+
 export function AdminUsuarios({ cu, isMobile }) {
   const [usuarios, setUsuarios] = useState([])
   const [sucursales, setSucursales] = useState([])
@@ -29,6 +45,11 @@ export function AdminUsuarios({ cu, isMobile }) {
   const [form, setForm] = useState(formVacio())
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje] = useState(null)
+  const [showReset, setShowReset] = useState(false)
+  const [resetUser, setResetUser] = useState(null)
+  const [resetPass, setResetPass] = useState('')
+  const [resetLoading, setResetLoading] = useState(false)
+  const [impersonando, setImpersonando] = useState(null)
 
   function formVacio() {
     return {
@@ -164,6 +185,52 @@ export function AdminUsuarios({ cu, isMobile }) {
       setMensaje({ tipo: "ok", txt: `Usuario ${u.activo ? 'desactivado' : 'activado'}` })
     } catch (e) {
       setMensaje({ tipo: "error", txt: e.message })
+    }
+  }
+
+  // Resetear clave de un usuario
+  const abrirReset = (u) => {
+    setResetUser(u)
+    setResetPass('')
+    setShowReset(true)
+  }
+
+  const ejecutarReset = async () => {
+    if (!resetUser?.auth_uid) {
+      setMensaje({ tipo: 'error', txt: 'Este usuario no tiene cuenta Auth configurada' })
+      setShowReset(false)
+      return
+    }
+    if (resetPass.length < 8) {
+      setMensaje({ tipo: 'error', txt: 'La clave debe tener al menos 8 caracteres' })
+      return
+    }
+    setResetLoading(true)
+    const res = await adminAction('set_password', { auth_uid: resetUser.auth_uid, password: resetPass })
+    setResetLoading(false)
+    if (res.ok) {
+      setMensaje({ tipo: 'ok', txt: 'Clave actualizada para ' + resetUser.nombre + '. Comunícasela por canal seguro.' })
+      setShowReset(false)
+    } else {
+      setMensaje({ tipo: 'error', txt: res.error || 'Error al actualizar clave' })
+    }
+  }
+
+  // Ver como usuario (impersonación)
+  const verComo = async (u) => {
+    if (!u.auth_uid) {
+      setMensaje({ tipo: 'error', txt: 'Este usuario no tiene cuenta Auth. Primero configúrala.' })
+      return
+    }
+    if (!confirm()) return
+    setImpersonando(u.id)
+    const res = await adminAction('impersonate', { auth_uid: u.auth_uid, email: u.correo })
+    setImpersonando(null)
+    if (res.ok && res.link) {
+      window.open(res.link, '_blank')
+      setMensaje({ tipo: 'ok', txt: 'Link generado para ' + u.nombre + '. Se abrió en nueva pestaña. Expira en 60 min.' })
+    } else {
+      setMensaje({ tipo: 'error', txt: res.error || 'Error al generar link de impersonación' })
     }
   }
 
@@ -305,6 +372,8 @@ export function AdminUsuarios({ cu, isMobile }) {
                     <td style={{ padding: "10px 14px", textAlign: "right" }}>
                       <div style={{ display: "inline-flex", gap: 4 }}>
                         <button onClick={() => editar(u)} title="Editar" style={{ padding: "6px 10px", borderRadius: 8, background: "#F2F2F7", border: "none", cursor: "pointer", fontSize: 12 }}>✏️</button>
+                        <button onClick={() => abrirReset(u)} title="Resetear clave" style={{ padding: "6px 10px", borderRadius: 8, background: "#007AFF15", border: "none", cursor: "pointer", fontSize: 12 }}>🔑</button>
+                        <button onClick={() => verComo(u)} title="Ver como este usuario" disabled={impersonando === u.id} style={{ padding: "6px 10px", borderRadius: 8, background: "#AF52DE15", border: "none", cursor: impersonando === u.id ? "default" : "pointer", fontSize: 12, opacity: impersonando === u.id ? 0.5 : 1 }}>👁</button>
                         <button onClick={() => toggleActivo(u)} title={u.activo ? "Desactivar" : "Activar"} style={{ padding: "6px 10px", borderRadius: 8, background: "#F2F2F7", border: "none", cursor: "pointer", fontSize: 12 }}>
                           {u.activo ? "🚫" : "✅"}
                         </button>
@@ -317,6 +386,18 @@ export function AdminUsuarios({ cu, isMobile }) {
           </table>
         </div>
       </div>
+
+      {/* MODAL RESET CLAVE */}
+      {showReset && resetUser && (
+        <ModalResetClave
+          user={resetUser}
+          pass={resetPass}
+          setPass={setResetPass}
+          loading={resetLoading}
+          onGuardar={ejecutarReset}
+          onClose={() => { setShowReset(false); setResetPass('') }}
+        />
+      )}
 
       {/* MODAL FORM */}
       {showForm && (
@@ -381,6 +462,46 @@ export function AdminUsuarios({ cu, isMobile }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Modal resetear clave
+function ModalResetClave({ user, pass, setPass, loading, onGuardar, onClose }) {
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 20, padding: 28, width: '100%', maxWidth: 420 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#1C1C1E' }}>🔑 Resetear clave</div>
+            <div style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>{user?.nombre} · {user?.correo}</div>
+          </div>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 16, background: '#F2F2F7', border: 'none', cursor: 'pointer', fontSize: 14 }}>×</button>
+        </div>
+        <div style={{ padding: 12, background: '#FFF8E1', borderRadius: 10, marginBottom: 14, fontSize: 12, color: '#8B6914', border: '1px solid #FFE082' }}>
+          ⚠️ Define una clave temporal y comunícasela al usuario por WhatsApp o en persona. El usuario podrá cambiarla desde el AppHub.
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#3A3A3C', marginBottom: 6 }}>Nueva clave temporal <span style={{ color: '#FF3B30' }}>*</span></label>
+          <input
+            type="text"
+            value={pass}
+            onChange={e => setPass(e.target.value)}
+            placeholder="Mínimo 8 caracteres"
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid #E5E5EA', fontSize: 14, outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }}
+            autoFocus
+          />
+          {pass.length > 0 && pass.length < 8 && (
+            <div style={{ fontSize: 11, color: '#FF3B30', marginTop: 4 }}>Mínimo 8 caracteres</div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '10px 18px', borderRadius: 10, background: '#F2F2F7', color: '#3A3A3C', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+          <button disabled={pass.length < 8 || loading} onClick={onGuardar} style={{ padding: '10px 18px', borderRadius: 10, background: (pass.length < 8 || loading) ? '#8E8E93' : '#007AFF', color: '#fff', border: 'none', fontSize: 13, fontWeight: 600, cursor: (pass.length < 8 || loading) ? 'default' : 'pointer' }}>
+            {loading ? 'Guardando...' : 'Establecer clave'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
