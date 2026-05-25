@@ -290,7 +290,16 @@ export function CierreDelDiaTab({ usuario }) {
     : null
 
   const [sucursales, setSucursales] = useState([])
-  const [sucursalSel, setSucursalSel] = useState(esAdmin ? 'suc-lg' : (usuario.sucursal_id ?? ''))
+  // Si hay filtro de sucursal por rol, forzar ese valor (no puede elegir otra)
+  const sucursalForzada = sucursalFiltro  // null = puede elegir cualquiera
+  const [sucursalSel, setSucursalSel] = useState(
+    sucursalForzada || (esAdmin ? 'suc-lg' : (usuario.sucursal_id ?? ''))
+  )
+
+  // Sincronizar sucursalSel con sucursalForzada cuando caps cargan
+  useEffect(() => {
+    if (sucursalForzada) setSucursalSel(sucursalForzada)
+  }, [sucursalForzada])
   const [fecha, setFecha] = useState(todayISO())
   const [umbrales, setUmbrales] = useState(UMBRALES_DEFAULT)
 
@@ -438,9 +447,10 @@ export function CierreDelDiaTab({ usuario }) {
           {esAdmin && (
             <div>
               <label style={labelSt}>Sucursal</label>
-              <select style={selectSt} value={sucursalSel} onChange={e => setSucursalSel(e.target.value)}>
+              <select style={{...selectSt, opacity: sucursalForzada ? 0.6 : 1}} value={sucursalSel} onChange={e => !sucursalForzada && setSucursalSel(e.target.value)} disabled={!!sucursalForzada}>
                 {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
               </select>
+              {sucursalForzada && <div style={{fontSize:11,color:'#8E8E93',marginTop:3}}>Restringido a tu sucursal</div>}
             </div>
           )}
           <div>

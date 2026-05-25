@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../supabase'
 
 const ROLES_LEGADO = [
+  // Roles ERP Compras
   { k: "admin",            l: "Admin",            c: "#FF3B30" },
   { k: "dir_general",      l: "Dir. General",     c: "#FF3B30" },
   { k: "dir_finanzas",     l: "Dir. Finanzas",    c: "#AF52DE" },
@@ -11,7 +12,17 @@ const ROLES_LEGADO = [
   { k: "jefe_bodega",      l: "Jefe Bodega",      c: "#FF9500" },
   { k: "jefe_operaciones", l: "Jefe Operaciones", c: "#FF9500" },
   { k: "directorio",       l: "Directorio",       c: "#8E8E93" },
-  { k: "cajero",           l: "Cajero/Vendedor",  c: "#34C759" }
+  { k: "cajero",           l: "Cajero/Vendedor",  c: "#34C759" },
+  // Roles Finanzas
+  { k: "tesorero",         l: "Tesorero",         c: "#AF52DE" },
+  { k: "lector",           l: "Lector",           c: "#8E8E93" },
+  // Roles compartidos
+  { k: "jefe_tienda",      l: "Jefe de Tienda",   c: "#FF9500" },
+  { k: "gerencia",         l: "Gerencia",         c: "#FF3B30" },
+  // Roles Postventa
+  { k: "postventa",        l: "Ejecutivo PV",     c: "#007AFF" },
+  { k: "operaciones",      l: "Operaciones",      c: "#34C759" },
+  { k: "caja",             l: "Caja",             c: "#AF52DE" }
 ]
 
 const rolInfo = k => ROLES_LEGADO.find(r => r.k === k) || { k, l: k, c: "#8E8E93" }
