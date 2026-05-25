@@ -1271,7 +1271,7 @@ function RepoView({prods,prodsSuc=[],cart,setCart,go,config,params,paramsABCD,su
     </div>}
 
     {/* EXPANDED TABLE with sticky header + clickable sort */}
-    <div style={{overflowY:"auto",maxHeight:"calc(100vh - 280px)",borderRadius:10,border:"1px solid #D1D1D6"}}>
+    <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}><div style={{overflowY:"auto",maxHeight:"calc(100vh - 280px)",borderRadius:10,border:"1px solid #D1D1D6",minWidth:isMobile?600:"auto"}}>
     <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,tableLayout:"auto"}}>
       <thead style={{position:"sticky",top:0,zIndex:5}}><tr style={{background:"#E5E5EA"}}>
         {[["",""],["Producto","producto"],["Tipo","tipo_producto"],["Clasif.","clasif_abcd"],["Estado","estado"],["Ene","venta_mes_1"],["Feb","venta_mes_2"],["Mar","venta_mes_3"],["Abr","venta_mes_4"],["Vta Total","venta_total"],["Quieb.","meses_quiebre"],["Vta Comp.","vta_prom_compensada"],["Vta/Día","vta_prom_diaria"],["Stock","stock_actual"],["Tráns.","stock_transito"],["Cob.","dias_cobertura"],["Pto Re.","punto_reorden"],["Reponer","reposicion_necesaria"],["Costo U.","costo_unitario"],["Inversión","costo_reposicion"]].map(([label,col],i)=>
@@ -1301,7 +1301,7 @@ function RepoView({prods,prodsSuc=[],cart,setCart,go,config,params,paramsABCD,su
           <td style={{padding:"7px 4px",textAlign:"right",color:"#636366",fontSize:12}}>{it.costo_unitario?fUD(it.costo_unitario):"—"}</td>
           <td style={{padding:"7px 4px",textAlign:"right",fontWeight:600,fontSize:12}}>{it.costo_reposicion?fmt(it.costo_reposicion):"—"}</td>
         </tr>})}</tbody>
-    </table></div>
+    </table></div></div>
     <div style={{padding:"8px 12px",background:"#F2F2F7",borderRadius:"0 0 10px 10px",fontSize:11,color:"#8E8E93",display:"flex",justifyContent:"space-between"}}><span>{fil.length} de {resumen.total} productos</span><span>Inversión reposición: <strong style={{color:"#1C1C1E"}}>{fmt(fil.filter(i=>i.estado==="Reposición").reduce((s,i)=>s+(i.costo_reposicion||0),0))}</strong></span></div>
   </div>
 
@@ -4354,7 +4354,7 @@ function CoberturaView({prods=[],ocs=[],config={},params=[],paramsABCD=[]}){
     <Cd>
       {filas.length===0?<div style={{padding:30,textAlign:"center",color:"#8E8E93"}}>No hay productos que cumplan los filtros.</div>:
       <div style={{overflow:"auto",position:"relative"}}>
-        <table style={{borderCollapse:"separate",borderSpacing:3,width:"100%",minWidth:1000}}>
+        <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",borderRadius:10,border:"1px solid #E5E5EA"}}><table style={{borderCollapse:"separate",borderSpacing:3,width:"100%",minWidth:1000}}>
           <thead>
             <tr>
               <th style={{textAlign:"left",fontSize:10,fontWeight:700,color:"#8E8E93",textTransform:"uppercase",padding:"4px 8px",position:"sticky",left:0,background:"#fff",zIndex:3,minWidth:250}}>Ítem</th>
@@ -4541,7 +4541,7 @@ function CoberturaView({prods=[],ocs=[],config={},params=[],paramsABCD=[]}){
               </>
             })}
           </tbody>
-        </table>
+        </table></div>
       </div>}
     </Cd>
 
