@@ -2745,7 +2745,8 @@ const DetalleCaso = ({caso, cu, codigos, onClose, onRefresh}) => {
       {(() => {
         // Aplica si: el form3 actual es nc_transfer (directo o via escalamiento aprobado)
         const esTransfer = form3Data?.tipo_resolucion === 'nc_transfer'
-        const yaEjecutada = form4Data?.transfer_ejecutada
+        // transfer_ejecutada no existe en schema actual — se infiere del estado
+        const yaEjecutada = casoActual.estado === "cerrado" && form4Data != null
         if (!esTransfer) return null
         if (!['cerrado','transfer_pendiente','en_resolucion'].includes(casoActual.estado)) return null
         return (
@@ -4848,7 +4849,8 @@ const NuevoCaso = ({cu, codigos, onClose, onCreado}) => {
   const codPorBloque = useMemo(() => {
     const m = {}
     codigos.forEach(c => {
-      if (!m[c.bloque]) m[c.bloque] = {nombre:c.bloque_nombre, items:[]}
+      const bnm = {B1:'Problemas de producto',B2:'Devoluciones y cambios',B3:'Problemas de entrega',B4:'Instalación',B5:'Garantía',B6:'Casos especiales'}
+      if (!m[c.bloque]) m[c.bloque] = {nombre:bnm[c.bloque]||c.bloque, items:[]}
       m[c.bloque].items.push(c)
     })
     return Object.entries(m).sort((a,b) => a[0].localeCompare(b[0]))
@@ -6542,7 +6544,8 @@ const ModuloMatriz = ({codigos, onRefresh}) => {
   const porBloque = useMemo(() => {
     const m = {}
     fil.forEach(c => {
-      if (!m[c.bloque]) m[c.bloque] = {nombre: c.bloque_nombre, items:[]}
+      const bnm2 = {B1:'Problemas de producto',B2:'Devoluciones y cambios',B3:'Problemas de entrega',B4:'Instalación',B5:'Garantía',B6:'Casos especiales'}
+      if (!m[c.bloque]) m[c.bloque] = {nombre: bnm2[c.bloque]||c.bloque, items:[]}
       m[c.bloque].items.push(c)
     })
     return Object.entries(m).sort((a,b) => a[0].localeCompare(b[0]))
@@ -6701,7 +6704,7 @@ const ModuloMatriz = ({codigos, onRefresh}) => {
       {sel && (
         <Sheet open onClose={() => setSel(null)} title={`⚙️ Editar código ${sel.codigo}`}>
           <div style={{...css.cardSm, marginBottom:14, borderLeft:`3px solid ${CL[BLOQUE_CL[sel.bloque]||'D'].c}`}}>
-            <div style={{fontSize:11, color:"#8E8E93"}}>Bloque {sel.bloque} · {sel.bloque_nombre}</div>
+            <div style={{fontSize:11, color:"#8E8E93"}}>Bloque {sel.bloque}</div>
           </div>
           <Fl l="Descripción del caso">
             <textarea style={css.textarea} value={sel.descripcion}
