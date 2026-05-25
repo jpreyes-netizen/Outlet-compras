@@ -1905,7 +1905,7 @@ const Form2Validacion = ({caso, cu, onClose, onGuardado}) => {
 
     const id_form2    = "f2" + Date.now().toString(36)
     // Siempre pasa a resolución — Postventa decide el cierre con el insumo de Operaciones
-    const nuevoEstado = f.procede_reclamo ? 'en_resolucion' : 'en_resolucion'
+    const nuevoEstado = f.procede_reclamo ? 'en_resolucion' : 'rechazado'
 
     // Serializar todos los productos inspeccionados
     const prodsTexto = prodsSel.length > 0
@@ -1949,7 +1949,7 @@ const Form2Validacion = ({caso, cu, onClose, onGuardado}) => {
       caso_id:        caso.id,
       evento:         'form2_completado',
       estado_anterior:'en_validacion_tecnica',
-      estado_nuevo:   'en_resolucion',
+      estado_nuevo:   f.procede_reclamo ? 'en_resolucion' : 'rechazado',
       detalle:        f.procede_reclamo
         ? `Validación técnica por ${cu.nombre} — PROCEDE. Pasa a resolución.`
         : `Validación técnica por ${cu.nombre} — NO PROCEDE según Operaciones. Postventa revisará y decidirá.`,
