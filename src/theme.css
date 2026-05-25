@@ -1,0 +1,121 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   THEME.CSS — Design tokens unificados para ERP Outlet de Puertas
+   Light mode pulido · Paleta moderna · WCAG AA contraste mínimo
+   ═══════════════════════════════════════════════════════════════════════════
+   USO en JS/React:
+     style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+   USO en CSS:
+     background: var(--bg-surface);
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── FONDOS Y SURFACES ───────────────────────────────────────────────── */
+  --bg-page:       #F5F5F7;          /* Fondo principal de la página */
+  --bg-surface:    #FFFFFF;          /* Cards, modales, paneles */
+  --bg-surface-2:  #FAFAFC;          /* Surfaces secundarias, headers tabla */
+  --bg-hover:      #F0F0F3;          /* Hover sobre filas y botones ghost */
+  --bg-disabled:   #F3F4F6;          /* Inputs deshabilitados */
+
+  /* ── BORDES (3 niveles de jerarquía) ─────────────────────────────────── */
+  --border-1:      rgba(0,0,0,0.06); /* Bordes sutiles, divisores */
+  --border-2:      rgba(0,0,0,0.10); /* Inputs, cards */
+  --border-3:      rgba(0,0,0,0.16); /* Botones secundarios, hover */
+
+  /* ── TEXTO (4 niveles) ───────────────────────────────────────────────── */
+  --text-primary:   #1C1C1E;         /* Texto principal */
+  --text-secondary: #4B5563;         /* Texto secundario */
+  --text-muted:     #6B7280;         /* Labels, ayuda */
+  --text-disabled:  #9CA3AF;         /* Deshabilitado, placeholder */
+
+  /* ── ACENTO PRIMARIO (Indigo moderno) ────────────────────────────────── */
+  --accent:        #4F46E5;          /* Botones primarios, links */
+  --accent-hover:  #4338CA;          /* Hover sobre primary */
+  --accent-bg:     #EEF2FF;          /* Fondo de chips/badges con acento */
+  --accent-text:   #3730A3;          /* Texto sobre accent-bg */
+
+  /* ── ESTADOS SEMÁNTICOS (cada uno con triada: fuerte/bg/texto-sobre-bg) ─ */
+  --success:       #059669;          /* Verde esmeralda */
+  --success-bg:    #D1FAE5;
+  --success-text:  #065F46;
+
+  --warning:       #D97706;          /* Ámbar */
+  --warning-bg:    #FEF3C7;
+  --warning-text:  #92400E;
+
+  --danger:        #DC2626;          /* Rojo coral */
+  --danger-bg:     #FEE2E2;
+  --danger-text:   #991B1B;
+
+  --info:          #0284C7;          /* Azul cielo */
+  --info-bg:       #DBEAFE;
+  --info-text:     #1E40AF;
+
+  --purple:        #7C3AED;          /* Violeta */
+  --purple-bg:     #EDE9FE;
+  --purple-text:   #5B21B6;
+
+  --pink:          #DB2777;          /* Rosa magenta */
+  --pink-bg:       #FCE7F3;
+  --pink-text:     #9D174D;
+
+  /* ── COLORES DE IDENTIDAD POR APP ────────────────────────────────────── */
+  --app-compras:   #D97706;          /* Ámbar — flujo logística */
+  --app-finanzas:  #059669;          /* Esmeralda — dinero/contabilidad */
+  --app-postventa: #7C3AED;          /* Violeta — atención cliente */
+  --app-admin:     #DC2626;          /* Rojo — control y seguridad */
+
+  /* ── CLASIFICACIÓN ABCD (Compras: criticidad de productos) ───────────── */
+  --abcd-A-bg:     #FEE2E2;
+  --abcd-A-text:   #991B1B;
+  --abcd-B-bg:     #DBEAFE;
+  --abcd-B-text:   #1E40AF;
+  --abcd-C-bg:     #D1FAE5;
+  --abcd-C-text:   #065F46;
+  --abcd-D-bg:     #F3F4F6;
+  --abcd-D-text:   #4B5563;
+
+  /* ── BORDER RADIUS (5 valores únicos) ────────────────────────────────── */
+  --r-sm:   6px;                     /* Chips pequeños, badges */
+  --r-md:   10px;                    /* Inputs, botones, cards pequeños */
+  --r-lg:   14px;                    /* Cards principales, paneles */
+  --r-xl:   20px;                    /* Modales, contenedores grandes */
+  --r-full: 999px;                   /* Píldoras, avatares circulares */
+
+  /* ── ESPACIADO (escala 4px) ──────────────────────────────────────────── */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+
+  /* ── SOMBRAS (3 niveles) ─────────────────────────────────────────────── */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.08);
+  --shadow-focus: 0 0 0 3px rgba(79,70,229,0.15);  /* Anillo de focus inputs */
+
+  /* ── TRANSICIONES ────────────────────────────────────────────────────── */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.2s ease;
+}
+
+/* ── ESTILOS GLOBALES BASE ─────────────────────────────────────────────── */
+body {
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Focus visible accesible en todos los inputs/buttons */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
