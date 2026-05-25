@@ -7,6 +7,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase, signOut } from '../supabase'
 import { preloadCaps, canSync } from '../core/permisos'
+import { useResponsive } from '../core/responsive'
 
 /* ═══════════════════════════════════════════════════════════════════════════
    2. HELPERS GLOBALES
@@ -183,12 +184,12 @@ const ESTADOS = {
 const SLA = { validacion:24, resolucion:48, escalado:24 }
 
 const css = {
-  page:    {fontFamily:FONT, margin:0, padding:"0 20px 100px", background:"#F2F2F7", minHeight:"100vh", fontSize:14},
-  card:    {background:"#fff", borderRadius:16, padding:"16px 18px", boxShadow:"0 1px 3px rgba(0,0,0,0.06)", marginBottom:10, border:"1px solid rgba(0,0,0,0.04)"},
-  cardSm:  {background:"#fff", borderRadius:12, padding:"12px 14px", boxShadow:"0 1px 2px rgba(0,0,0,0.04)", border:"1px solid rgba(0,0,0,0.04)"},
-  input:   {width:"100%", padding:"10px 14px", borderRadius:12, border:"1px solid #e5e5ea", fontSize:14, background:"#fff", outline:"none", fontFamily:FONT},
-  select:  {width:"100%", padding:"10px 14px", borderRadius:12, border:"1px solid #e5e5ea", fontSize:14, background:"#fff", fontFamily:FONT},
-  textarea:{width:"100%", padding:"10px 14px", borderRadius:12, border:"1px solid #e5e5ea", fontSize:14, background:"#fff", outline:"none", fontFamily:FONT, resize:"vertical", minHeight:80},
+  page:    {fontFamily:FONT, margin:0, padding:"0 20px calc(100px + env(safe-area-inset-bottom))", background:"var(--bg-page)", minHeight:"100vh", fontSize:14},
+  card:    {background:"var(--bg-surface)", borderRadius:"var(--r-lg)", padding:"16px 18px", boxShadow:"var(--shadow-md)", marginBottom:10, border:"1px solid var(--border-1)"},
+  cardSm:  {background:"var(--bg-surface)", borderRadius:"var(--r-md)", padding:"12px 14px", boxShadow:"var(--shadow-sm)", border:"1px solid var(--border-1)"},
+  input:   {width:"100%", padding:"10px 14px", borderRadius:"var(--r-md)", border:"1px solid var(--border-2)", fontSize:14, background:"var(--bg-surface)", outline:"none", fontFamily:FONT},
+  select:  {width:"100%", padding:"10px 14px", borderRadius:"var(--r-md)", border:"1px solid var(--border-2)", fontSize:14, background:"var(--bg-surface)", fontFamily:FONT},
+  textarea:{width:"100%", padding:"10px 14px", borderRadius:"var(--r-md)", border:"1px solid var(--border-2)", fontSize:14, background:"var(--bg-surface)", outline:"none", fontFamily:FONT, resize:"vertical", minHeight:80},
   btn:     {padding:"12px 20px", borderRadius:12, fontSize:14, fontWeight:600, border:"none", cursor:"pointer", display:"inline-flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:FONT},
   modal:   {position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.45)", backdropFilter:"blur(8px)", display:"flex", alignItems:"flex-end", justifyContent:"center", zIndex:999},
   row:     {display:"flex", gap:12, alignItems:"flex-start"},
@@ -6821,6 +6822,7 @@ export function PostventaApp({ cu, setAppActual }) {
   const [casos,     setCasos]     = useState([])
   const [codigos,   setCodigos]   = useState([])
   const [capsLoaded, setCapsLoaded] = useState(false)
+  const { isMobile, isXs } = useResponsive()
   const [tab,       setTab]       = useState(()=>{try{return localStorage.getItem('pv_tab')||'dashboard'}catch(e){return 'dashboard'}})
   const [modalNew,  setModalNew]  = useState(false)
   const [casoSel,   setCasoSel]   = useState(null)
@@ -6932,58 +6934,89 @@ export function PostventaApp({ cu, setAppActual }) {
       <style>{`
         @keyframes slideUp { from{transform:translateY(60px);opacity:0} to{transform:translateY(0);opacity:1} }
         * { box-sizing:border-box; margin:0; padding:0 }
-        body { background:#F2F2F7; overflow-x:hidden }
+        body { background:var(--bg-page); overflow-x:hidden }
         input:focus, select:focus, textarea:focus {
-          border-color:#007AFF !important;
-          box-shadow:0 0 0 3px rgba(0,122,255,0.12);
+          border-color:var(--accent) !important;
+          box-shadow:0 0 0 3px rgba(79,70,229,0.12);
           outline:none;
         }
-        ::selection { background:#007AFF; color:#fff }
+        ::selection { background:var(--accent); color:#fff }
         ::-webkit-scrollbar { width:8px; height:8px }
         ::-webkit-scrollbar-thumb { background:#C7C7CC; border-radius:4px }
-        ::-webkit-scrollbar-thumb:hover { background:#8E8E93 }
+        ::-webkit-scrollbar-thumb:hover { background:var(--text-muted) }
         optgroup { font-weight:700; color:#3C3C43 }
         option   { font-weight:400; color:#1C1C1E }
       `}</style>
 
-      {/* ── HEADER ── */}
+      {/* ── HEADER RESPONSIVE ── */}
       <div style={{
-        padding:"14px 0 10px",
+        padding: isMobile ? "10px 0 8px" : "14px 0 10px",
         display:"flex", alignItems:"center", justifyContent:"space-between",
-        borderBottom:"1px solid #E5E5EA", marginBottom:14
+        borderBottom:"1px solid var(--border-1)", marginBottom: isMobile ? 10 : 14
       }}>
-        <div style={{display:"flex", alignItems:"center", gap:10}}>
-          <div style={{fontSize:28}}>🚪</div>
-          <div>
-            <div style={{fontSize:18, fontWeight:800, letterSpacing:"-0.02em", lineHeight:1.1}}>Postventa</div>
-            <div style={{fontSize:11, color:"#8E8E93", fontWeight:500}}>Outlet de Puertas SpA</div>
+        {/* Logo + título */}
+        <div style={{display:"flex", alignItems:"center", gap: isMobile ? 8 : 10, minWidth:0, flex:1}}>
+          <div style={{fontSize: isMobile ? 22 : 28, flexShrink:0}}>🚪</div>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize: isMobile ? 15 : 18, fontWeight:800, letterSpacing:"-0.02em", lineHeight:1.1}}>Postventa</div>
+            {!isXs && <div style={{fontSize:11, color:"var(--text-muted)", fontWeight:500}}>Outlet de Puertas SpA</div>}
           </div>
+          {/* En móvil: nombre corto inline */}
+          {isMobile && (
+            <div style={{fontSize:12, fontWeight:600, color:"var(--text-secondary)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0}}>
+              · {cu.nombre.split(" ")[0]}
+            </div>
+          )}
         </div>
-        <div style={{display:"flex", alignItems:"center", gap:10}}>
-          <Bd c={rd.c} bg={rd.c+"18"} lg>{rd.l}</Bd>
-          <Av nombre={cu.nombre} color={rd.c}/>
-          <div style={{fontSize:13, fontWeight:600, color:"#1C1C1E"}}>{cu.nombre.split(" ")[0]}</div>
-          <button onClick={volverHub} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,padding:"6px 10px",borderRadius:10,background:"#AF52DE15",border:"none",cursor:"pointer",color:"#AF52DE",minWidth:56}} title="Cambiar de aplicacion"><span style={{fontSize:14,lineHeight:1}}>⊞</span><span style={{fontSize:9,fontWeight:700,letterSpacing:"0.02em"}}>Apps</span></button>
-          <button onClick={cerrarSesion} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,padding:"6px 10px",borderRadius:10,background:"#FF3B3015",border:"none",cursor:"pointer",color:"#FF3B30",minWidth:56}} title="Cerrar sesion"><span style={{fontSize:14,lineHeight:1}}>⏻</span><span style={{fontSize:9,fontWeight:700,letterSpacing:"0.02em"}}>Salir</span></button>
+
+        {/* Acciones derecha */}
+        <div style={{display:"flex", alignItems:"center", gap: isMobile ? 4 : 10, flexShrink:0}}>
+          {/* En desktop: badge rol + avatar + nombre */}
+          {!isMobile && <>
+            <Bd c={rd.c} bg={rd.c+"18"} lg>{rd.l}</Bd>
+            <Av nombre={cu.nombre} color={rd.c}/>
+            <div style={{fontSize:13, fontWeight:600, color:"var(--text-primary)"}}>{cu.nombre.split(" ")[0]}</div>
+          </>}
+          {/* En móvil: solo avatar pequeño */}
+          {isMobile && <Av nombre={cu.nombre} color={rd.c}/>}
+          <button onClick={volverHub} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,padding:isMobile?"5px 8px":"6px 10px",borderRadius:10,background:"var(--purple-bg)",border:"none",cursor:"pointer",color:"var(--purple)",minWidth: isMobile?40:56}} title="Cambiar de aplicacion">
+            <span style={{fontSize: isMobile?12:14,lineHeight:1}}>⊞</span>
+            <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.02em"}}>Apps</span>
+          </button>
+          <button onClick={cerrarSesion} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,padding:isMobile?"5px 8px":"6px 10px",borderRadius:10,background:"var(--danger-bg)",border:"none",cursor:"pointer",color:"var(--danger)",minWidth: isMobile?40:56}} title="Cerrar sesion">
+            <span style={{fontSize: isMobile?12:14,lineHeight:1}}>⏻</span>
+            <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.02em"}}>Salir</span>
+          </button>
         </div>
       </div>
 
-      {/* ── TABS ── */}
-      <div style={{display:"flex", gap:4, marginBottom:16}}>
+      {/* ── TABS RESPONSIVE ── */}
+      <div style={{
+        display:"flex", gap: isMobile ? 3 : 4, marginBottom: isMobile ? 12 : 16,
+        overflowX:"auto", WebkitOverflowScrolling:"touch",
+        scrollbarWidth:"none", msOverflowStyle:"none",
+        background: !isMobile ? "var(--bg-surface-2)" : "transparent",
+        border: !isMobile ? "1px solid var(--border-1)" : "none",
+        borderRadius: !isMobile ? 10 : 0,
+        padding: !isMobile ? "4px" : "2px 0 4px",
+      }}>
         {TABS.map(t => (
           <button key={t.k} onClick={() => setTab(t.k)} style={{
-            padding:"8px 16px", borderRadius:10, border:"none", cursor:"pointer",
-            fontFamily:FONT, fontSize:13, fontWeight:600,
-            background: tab===t.k ? "#007AFF" : "#fff",
-            color:       tab===t.k ? "#fff"    : "#8E8E93",
-            boxShadow: tab===t.k ? "0 2px 8px rgba(0,122,255,0.3)" : "none",
-            transition:"all 0.15s", position:"relative"
+            padding: isMobile ? "7px 12px" : "8px 16px",
+            borderRadius:8, border: tab===t.k ? "none" : (isMobile ? "1px solid var(--border-1)" : "none"),
+            cursor:"pointer", fontFamily:FONT,
+            fontSize: isMobile ? 12 : 13,
+            fontWeight:600, whiteSpace:"nowrap", flexShrink:0,
+            background: tab===t.k ? "var(--accent)" : (isMobile ? "var(--bg-surface)" : "transparent"),
+            color: tab===t.k ? "#fff" : "var(--text-muted)",
+            boxShadow: tab===t.k ? "0 2px 8px rgba(79,70,229,0.25)" : "none",
+            transition:"all 0.15s", position:"relative",
           }}>
             {t.ic} {t.l}
             {t.badge > 0 && (
               <span style={{
                 position:"absolute", top:-4, right:-4,
-                background:"#FF3B30", color:"#fff",
+                background:"var(--danger)", color:"#fff",
                 fontSize:10, fontWeight:800, borderRadius:"50%",
                 width:18, height:18, display:"flex",
                 alignItems:"center", justifyContent:"center",
