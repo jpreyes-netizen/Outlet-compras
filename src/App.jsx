@@ -1271,7 +1271,7 @@ function RepoView({prods,prodsSuc=[],cart,setCart,go,config,params,paramsABCD,su
     </div>}
 
     {/* EXPANDED TABLE with sticky header + clickable sort */}
-    <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}><div style={{overflowY:"auto",maxHeight:"calc(100vh - 280px)",borderRadius:10,border:"1px solid #D1D1D6",minWidth:isMobile?600:"auto"}}>
+    <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}><div style={{overflowY:"auto",maxHeight:"calc(100vh - 280px)",borderRadius:10,border:"1px solid #D1D1D6",minWidth:window.innerWidth<768?600:"auto"}}>
     <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,tableLayout:"auto"}}>
       <thead style={{position:"sticky",top:0,zIndex:5}}><tr style={{background:"#E5E5EA"}}>
         {[["",""],["Producto","producto"],["Tipo","tipo_producto"],["Clasif.","clasif_abcd"],["Estado","estado"],["Ene","venta_mes_1"],["Feb","venta_mes_2"],["Mar","venta_mes_3"],["Abr","venta_mes_4"],["Vta Total","venta_total"],["Quieb.","meses_quiebre"],["Vta Comp.","vta_prom_compensada"],["Vta/Día","vta_prom_diaria"],["Stock","stock_actual"],["Tráns.","stock_transito"],["Cob.","dias_cobertura"],["Pto Re.","punto_reorden"],["Reponer","reposicion_necesaria"],["Costo U.","costo_unitario"],["Inversión","costo_reposicion"]].map(([label,col],i)=>
