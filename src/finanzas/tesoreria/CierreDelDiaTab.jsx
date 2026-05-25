@@ -618,7 +618,7 @@ export function CierreDelDiaTab({ usuario }) {
 
       {/* ── Panel lateral ── */}
       {panelVendedor && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 'calc(70px + env(safe-area-inset-bottom))', zIndex: 50, display: 'flex' }}>
           <div style={{ flex: 1, background: 'rgba(0,0,0,0.4)' }} onClick={() => setPanelVendedor(null)} />
           <aside style={{
             width: 520, maxWidth: '100%', height: '100%', background: '#fff',
