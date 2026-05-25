@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../supabase'
+import { preloadCaps, canSync } from '../core/permisos'
 
 /* ═══════════════════════════════════════════════════════════════════════════
    2. HELPERS GLOBALES
@@ -118,7 +119,35 @@ const ROLES = [
   },
 ]
 const rl = u => ROLES.find(r => r.k === u?.rol) || ROLES[3]
-const hp = (u, p) => { const r = rl(u); return r.p.includes("todo") || r.p.includes(p) }
+// Mapeo de permisos legado a capability IDs del sistema RBAC
+const PV_CAP_MAP = {
+  'ver_dash':          'pv.dashboard',
+  'ver_casos':         'pv.casos',
+  'ver_reportes':      'pv.dashboard',
+  'crear_caso':        'pv.crear_caso',
+  'editar_caso':       'pv.editar_caso',
+  'cerrar_caso':       'pv.cerrar_caso',
+  'escalar':           'pv.escalar',
+  'aprobar':           'pv.aprobar',
+  'aprobar_excepcion': 'pv.aprobar',
+  'form2':             'pv.form2',
+  'form3':             'pv.form3',
+  'form4':             'pv.form4',
+  'form4_transfer':    'pv.form4',
+  'gestionar_usuarios':'pv.usuarios',
+}
+// RBAC-6: hp() usa capabilities dinámicas si están cargadas, fallback a sistema legado
+const hp = (u, p, capsLoadedFlag) => {
+  if (!u) return false
+  // Si caps están cargadas, usar RBAC
+  if (capsLoadedFlag) {
+    const capId = PV_CAP_MAP[p]
+    if (capId) return canSync(u, 'postventa', capId) !== false
+  }
+  // Fallback legado
+  const r = rl(u)
+  return r.p.includes('todo') || r.p.includes(p)
+}
 
 // Mapa legible de permisos (para mostrar en UI)
 const PERMS_LABELS = {
@@ -503,7 +532,7 @@ const getEmailsPorRol = async (roles) => {
 
 // ─── DASHBOARD PROFESIONAL ────────────────────────────────────────────────
 const Dashboard = ({casos, codigos, cu, onNuevo, onVerCaso}) => {
-  const h = p => hp(cu, p)
+  const h = p => hp(cu, p, capsLoaded)
   const [hovKpi,    setHovKpi]    = useState(null)
   const [hovBar,    setHovBar]    = useState(null)
   const [hovProd,   setHovProd]   = useState(null)
@@ -1345,7 +1374,7 @@ const Dashboard = ({casos, codigos, cu, onNuevo, onVerCaso}) => {
 }
 // ─── LISTA DE CASOS ───────────────────────────────────────────────────────
 const ListaCasos = ({casos, cu, onVerCaso, onNuevo, onRefresh}) => {
-  const h = p => hp(cu, p)
+  const h = p => hp(cu, p, capsLoaded)
   const [busq,        setBusq]        = useState("")
   const [filtEst,     setFiltEst]     = useState("activos")  // 'activos'|'cerrados'|'todos'|estado específico
   const [filtSuc,     setFiltSuc]     = useState("todas")
@@ -6789,11 +6818,12 @@ export function PostventaApp({ cu, setAppActual }) {
   const [users,     setUsers]     = useState([])
   const [casos,     setCasos]     = useState([])
   const [codigos,   setCodigos]   = useState([])
+  const [capsLoaded, setCapsLoaded] = useState(false)
   const [tab,       setTab]       = useState(()=>{try{return localStorage.getItem('pv_tab')||'dashboard'}catch(e){return 'dashboard'}})
   const [modalNew,  setModalNew]  = useState(false)
   const [casoSel,   setCasoSel]   = useState(null)
 
-  // Carga inicial: usuarios, codigos (sin manejo de sesion — el ERP ya lo hace)
+  // Carga inicial: usuarios, codigos + precargar capabilities RBAC
   useEffect(() => {
     ;(async () => {
       const [{data: u}, {data: cod}] = await Promise.all([
@@ -6805,6 +6835,11 @@ export function PostventaApp({ cu, setAppActual }) {
       setLoading(false)
     })()
   }, [])
+
+  // RBAC-6: precargar capabilities cuando hay usuario
+  useEffect(() => {
+    if (cu?.id) preloadCaps(cu, 'postventa').then(() => setCapsLoaded(true))
+  }, [cu?.id])
 
   // Persistir tab seleccionado
   useEffect(()=>{try{localStorage.setItem('pv_tab',tab)}catch(e){}},[tab])
@@ -6847,7 +6882,7 @@ export function PostventaApp({ cu, setAppActual }) {
     setTab('casos')
   }
 
-  const h = p => cu ? hp(cu, p) : false
+  const h = p => cu ? hp(cu, p, capsLoaded) : false
 
   if (loading) return (
     <div style={{
