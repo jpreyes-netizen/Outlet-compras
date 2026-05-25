@@ -4,6 +4,7 @@ import { AdminUsuarios } from './AdminUsuarios'
 import { AdminAccesos } from './AdminAccesos'
 import { AdminApps } from './AdminApps'
 import { AdminRoles } from './AdminRoles'
+import { AdminPermisos } from './AdminPermisos'
 
 const ROLES = [
   { k: "admin",            l: "Admin",            c: "#FF3B30" },
@@ -23,7 +24,8 @@ const ADMIN_TABS = [
   { k: "usuarios", l: "Usuarios", ic: "👥", desc: "Crear, editar y desactivar usuarios" },
   { k: "accesos",  l: "Accesos",  ic: "🔐", desc: "Matriz de acceso usuario × aplicación" },
   { k: "apps",     l: "Apps",     ic: "📱", desc: "Activar o desactivar aplicaciones" },
-  { k: "roles",    l: "Roles",    ic: "🎭", desc: "Catálogo de roles y permisos por app" }
+  { k: "roles",    l: "Roles",    ic: "🎭", desc: "Catálogo de roles y permisos por app" },
+  { k: "permisos", l: "Permisos",  ic: "🔑", desc: "Gestionar capabilities por rol" }
 ]
 
 /* ═══ ADMIN APP — Componente raíz del módulo de administración ═══ */
@@ -201,6 +203,7 @@ export function AdminApp({ cu, setAppActual }) {
       {tab === "accesos"  && <AdminAccesos cu={cu} isMobile={isMobile} />}
       {tab === "apps"     && <AdminApps cu={cu} isMobile={isMobile} />}
       {tab === "roles"    && <AdminRoles cu={cu} isMobile={isMobile} />}
+      {tab === "permisos" && <AdminPermisos cu={cu} isMobile={isMobile} />}
     </div>
   )
 }
