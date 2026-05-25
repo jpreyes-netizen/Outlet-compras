@@ -630,6 +630,25 @@ export function CierreDelDiaTab({ usuario }) {
 
             <div style={{ flex: 1, padding: '16px 20px', overflowY: 'auto' }}>
 
+              {/* Si es admin/corroborador y no hay cierre → mensaje informativo */}
+              {(esAdmin || puedeCorroborar) && !panelVendedor.cierre && (
+                <div style={{
+                  padding: '40px 20px', textAlign: 'center',
+                  background: '#FAFAFC', borderRadius: 10,
+                  border: '1px dashed #D1D5DB',
+                  color: '#6B7280'
+                }}>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#4B5563', marginBottom: 4 }}>
+                    Sin cierre declarado
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6B7280' }}>
+                    Este vendedor aún no ha declarado su cierre del día.<br/>
+                    Una vez declarado, podrás corroborarlo aquí.
+                  </div>
+                </div>
+              )}
+
               {/* Si es el propio vendedor o no hay cierre → panel declaración */}
               {(!esAdmin && !puedeCorroborar) && !panelVendedor.cierre && (
                 <PanelDeclaracion
