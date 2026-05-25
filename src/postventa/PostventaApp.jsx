@@ -136,13 +136,15 @@ const PV_CAP_MAP = {
   'form4_transfer':    'pv.form4',
   'gestionar_usuarios':'pv.usuarios',
 }
-// RBAC-6: hp() usa capabilities dinámicas si están cargadas, fallback a sistema legado
-const hp = (u, p, capsLoadedFlag) => {
+// RBAC-6: hp() usa capabilities dinámicas si el cache está disponible, fallback a sistema legado
+const hp = (u, p) => {
   if (!u) return false
-  // Si caps están cargadas, usar RBAC
-  if (capsLoadedFlag) {
-    const capId = PV_CAP_MAP[p]
-    if (capId) return canSync(u, 'postventa', capId) !== false
+  // Intentar RBAC desde cache (no requiere await)
+  const capId = PV_CAP_MAP[p]
+  if (capId) {
+    const result = canSync(u, 'postventa', capId)
+    if (result !== false) return true
+    // Si result es false podría ser que caps no estén cargadas aún — verificar con fallback
   }
   // Fallback legado
   const r = rl(u)
@@ -532,7 +534,7 @@ const getEmailsPorRol = async (roles) => {
 
 // ─── DASHBOARD PROFESIONAL ────────────────────────────────────────────────
 const Dashboard = ({casos, codigos, cu, onNuevo, onVerCaso}) => {
-  const h = p => hp(cu, p, capsLoaded)
+  const h = p => hp(cu, p)
   const [hovKpi,    setHovKpi]    = useState(null)
   const [hovBar,    setHovBar]    = useState(null)
   const [hovProd,   setHovProd]   = useState(null)
@@ -1374,7 +1376,7 @@ const Dashboard = ({casos, codigos, cu, onNuevo, onVerCaso}) => {
 }
 // ─── LISTA DE CASOS ───────────────────────────────────────────────────────
 const ListaCasos = ({casos, cu, onVerCaso, onNuevo, onRefresh}) => {
-  const h = p => hp(cu, p, capsLoaded)
+  const h = p => hp(cu, p)
   const [busq,        setBusq]        = useState("")
   const [filtEst,     setFiltEst]     = useState("activos")  // 'activos'|'cerrados'|'todos'|estado específico
   const [filtSuc,     setFiltSuc]     = useState("todas")
@@ -6882,7 +6884,7 @@ export function PostventaApp({ cu, setAppActual }) {
     setTab('casos')
   }
 
-  const h = p => cu ? hp(cu, p, capsLoaded) : false
+  const h = p => cu ? hp(cu, p) : false
 
   if (loading) return (
     <div style={{
