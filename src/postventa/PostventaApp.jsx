@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useMemo } from 'react'
-import { supabase } from '../supabase'
+import { supabase, signOut } from '../supabase'
 import { preloadCaps, canSync } from '../core/permisos'
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -6852,6 +6852,12 @@ export function PostventaApp({ cu, setAppActual }) {
     setAppActual(null)
   }
 
+  const cerrarSesion = async () => {
+    try { await signOut() } catch(e) {}
+    try { localStorage.removeItem('outlet_app_actual') } catch(e) {}
+    window.location.reload()
+  }
+
   // Cargar casos cuando hay usuario
   useEffect(() => {
     if (!cu) return
@@ -6958,6 +6964,7 @@ export function PostventaApp({ cu, setAppActual }) {
           <Av nombre={cu.nombre} color={rd.c}/>
           <div style={{fontSize:13, fontWeight:600, color:"#1C1C1E"}}>{cu.nombre.split(" ")[0]}</div>
           <button onClick={volverHub} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,padding:"6px 10px",borderRadius:10,background:"#AF52DE15",border:"none",cursor:"pointer",color:"#AF52DE",minWidth:56}} title="Cambiar de aplicacion"><span style={{fontSize:14,lineHeight:1}}>⊞</span><span style={{fontSize:9,fontWeight:700,letterSpacing:"0.02em"}}>Apps</span></button>
+          <button onClick={cerrarSesion} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,padding:"6px 10px",borderRadius:10,background:"#FF3B3015",border:"none",cursor:"pointer",color:"#FF3B30",minWidth:56}} title="Cerrar sesion"><span style={{fontSize:14,lineHeight:1}}>⏻</span><span style={{fontSize:9,fontWeight:700,letterSpacing:"0.02em"}}>Salir</span></button>
         </div>
       </div>
 
