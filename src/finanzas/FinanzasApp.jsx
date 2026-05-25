@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, signOut } from '../supabase'
+import { preloadCaps, canSync } from '../core/permisos'
 import { FinDashboard } from './FinDashboard'
 import { FinConciliacion } from './FinConciliacion'
 import { FinTesoreria } from './FinTesoreria'
@@ -17,15 +18,13 @@ const rl = u => ROLES.find(r => r.k === u?.rol) || ROLES[5]
 
 /* ═══ FINANZAS APP — Componente raíz del sistema financiero ═══ */
 
+// RBAC-4: tabs vinculados a capabilities en vez de roles hardcodeados
 const ALL_FIN_TABS = [
-  { k: "dashboard",    l: "Dashboard",    ic: "📊", roles: ["admin","dir_general","dir_finanzas","tesorero","lector"] },
-  { k: "conciliacion", l: "Conciliación", ic: "🔄", roles: ["admin","dir_general","dir_finanzas","tesorero"] },
-  { k: "tesoreria",    l: "Tesorería",    ic: "💵", roles: ["admin","dir_general","dir_finanzas","tesorero","cajero"] },
-  { k: "presupuesto",  l: "Presupuesto",  ic: "📈", roles: ["admin","dir_general","dir_finanzas","tesorero","lector"] }
+  { k: "dashboard",    l: "Dashboard",    ic: "📊", cap: "fin.dashboard" },
+  { k: "conciliacion", l: "Conciliación", ic: "🔄", cap: "fin.conciliacion" },
+  { k: "tesoreria",    l: "Tesorería",    ic: "💵", cap: "fin.tesoreria" },
+  { k: "presupuesto",  l: "Presupuesto",  ic: "📈", cap: "fin.presupuesto" }
 ]
-const getFinTabs = (rol) => ALL_FIN_TABS.filter(t =>
-  t.roles.includes(rol) || rol === "admin"
-)
 
 export function FinanzasApp({ cu, setAppActual }) {
   const [tab, setTab] = useState(() => {
@@ -34,6 +33,12 @@ export function FinanzasApp({ cu, setAppActual }) {
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth < 768 : false
   )
+  const [capsLoaded, setCapsLoaded] = useState(false)
+
+  // Precargar capabilities al montar — permite usar canSync() en el render
+  useEffect(() => {
+    if (cu?.id) preloadCaps(cu, 'finanzas').then(() => setCapsLoaded(true))
+  }, [cu?.id])
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768)
@@ -46,7 +51,10 @@ export function FinanzasApp({ cu, setAppActual }) {
   }, [tab])
 
   const r = rl(cu)
-  const finTabs = getFinTabs(cu?.rol || "")
+  // RBAC-4: filtrar tabs por capabilities dinámicas
+  const finTabs = capsLoaded
+    ? ALL_FIN_TABS.filter(t => canSync(cu, 'finanzas', t.cap) !== false)
+    : ALL_FIN_TABS.filter(t => cu?.rol === 'admin')  // fallback mientras carga
 
   // Si el tab actual no está disponible para este rol, ir al primero disponible
   const tabValido = finTabs.find(t => t.k === tab) ? tab : (finTabs[0]?.k || "tesoreria")

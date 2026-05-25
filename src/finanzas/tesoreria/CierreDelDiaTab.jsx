@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import { Loader2, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, X, CheckCircle2, AlertTriangle, AlertCircle, RefreshCw } from 'lucide-react'
 import { supabase } from '../../supabase'
+import { preloadCaps, canSync, userScopeSync } from '../../core/permisos'
 import { MEDIOS, UMBRALES_DEFAULT, formatCLP, parseCLP, todayISO, inputSt, selectSt, labelSt, cardSt, btnSt, btnOutlineSt, estadoBadge, clasificarPorDiferencia } from './types'
 import { fetchSucursales, fetchUmbrales, fetchCierreDelDia, declararCierre, actualizarDeclaracion, corroborarCierre } from './api'
 
-const PUEDE_VER_TODAS = ['contabilidad', 'jefe_admin_finanzas', 'gerente_admin_finanzas', 'admin_sistema', 'admin']
+// RBAC-4: PUEDE_VER_TODAS reemplazado por canSync(cu, 'finanzas', 'fin.teso.cierre.ver_todas')
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function fmt(n) { return n == null ? '—' : formatCLP(n) }
@@ -42,9 +43,31 @@ function MoneyInput({ value, onChange, disabled }) {
   )
 }
 
-// ── Fetch BSALE via Edge Function ──────────────────────────────────────────
-async function fetchBsaleDia(fecha, sucursal_id) {
+// ── Fetch BSALE: cache-first, edge function como fallback ──────────────────
+async function fetchBsaleDia(fecha, sucursal_id, forzar = false) {
   try {
+    // 1) Si no se fuerza, intentar leer de la cache (instantáneo)
+    if (!forzar) {
+      const { data: cached } = await supabase
+        .from('ventas_bsale_dia')
+        .select('total_venta, total_nc, docs_venta, docs_nc, medios, por_recaudador, por_vendedor, sincronizado_at')
+        .eq('fecha', fecha)
+        .eq('sucursal_id', sucursal_id)
+        .maybeSingle()
+      if (cached && cached.por_recaudador) {
+        return {
+          total_venta: cached.total_venta,
+          medios_global: cached.medios ?? {},
+          por_recaudador: cached.por_recaudador ?? [],
+          por_vendedor: cached.por_vendedor ?? [],
+          docs_sucursal: cached.docs_venta ?? 0,
+          fecha, sucursal_id,
+          desde_cache: true,
+          sincronizado_at: cached.sincronizado_at,
+        }
+      }
+    }
+    // 2) Sin cache o forzando: llamar edge function (la guarda en cache)
     const { data: { session } } = await supabase.auth.getSession()
     const headers = { 'Content-Type': 'application/json' }
     if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
@@ -61,7 +84,7 @@ async function fetchBsaleDia(fecha, sucursal_id) {
 }
 
 // ── Panel declaración de un vendedor ───────────────────────────────────────
-function PanelDeclaracion({ vendedorBsale, cierre, sucursalId, fecha, usuario, vendedorLocal, umbrales, onGuardado }) {
+function PanelDeclaracion({ vendedorBsale, cierre, sucursalId, fecha, usuario, umbrales, onGuardado }) {
   const [valores, setValores] = useState(() => {
     if (cierre) return MEDIOS.reduce((a, m) => ({ ...a, [m.key]: Number(cierre[m.key] ?? 0) }), {})
     return MEDIOS.reduce((a, m) => ({ ...a, [m.key]: 0 }), {})
@@ -83,12 +106,8 @@ function PanelDeclaracion({ vendedorBsale, cierre, sucursalId, fecha, usuario, v
     if (!sucursalId) { toast.error('Selecciona una sucursal'); return }
     setSaving(true)
     try {
-      // Si hay vendedorLocal (admin declarando en nombre de otro), usar su id; si no, el usuario actual
-      const vId = vendedorLocal?.id ?? usuario.id
-      const bsaleVId = vendedorBsale?.bsale_user_id ?? null
       const payload = {
-        fecha, sucursal_id: sucursalId, vendedor_id: vId,
-        bsale_vendedor_id: bsaleVId,
+        fecha, sucursal_id: sucursalId, vendedor_id: usuario.id,
         observaciones_vendedor: obs.trim() || null,
         venta_bsale_api: recaudBsale,
         ...valores
@@ -131,9 +150,6 @@ function PanelDeclaracion({ vendedorBsale, cierre, sucursalId, fecha, usuario, v
                   </div>
                 ))}
             </div>
-          </div>
-          <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.15)', fontSize: 10, opacity: 0.65, lineHeight: 1.5 }}>
-            ℹ️ Ventas del día atribuidas a este vendedor. La declaración puede ser mayor si cobró facturas anteriores, abonos a cuentas corrientes u otros cobros que no generan venta nueva en BSALE.
           </div>
         </div>
       )}
@@ -249,7 +265,30 @@ function PanelDeclaracion({ vendedorBsale, cierre, sucursalId, fecha, usuario, v
 
 // ── Componente principal ───────────────────────────────────────────────────
 export function CierreDelDiaTab({ usuario }) {
-  const esAdmin = PUEDE_VER_TODAS.includes(usuario.rol)
+  const [capsLoaded, setCapsLoaded] = useState(false)
+
+  // Precargar capabilities al montar
+  useEffect(() => {
+    if (usuario?.id) preloadCaps(usuario, 'finanzas').then(() => setCapsLoaded(true))
+  }, [usuario?.id])
+
+  // RBAC-4: determinar modo via capabilities dinámicas
+  // ver_todas_sucursales: puede elegir cualquier sucursal y ve todos los cajeros
+  // corroborar: puede corroborar cierres de otros
+  // declarar: modo cajero — solo ve sus propios datos
+  const esAdmin = capsLoaded
+    ? canSync(usuario, 'finanzas', 'fin.teso.cierre.ver_todas') !== false
+    : usuario?.rol === 'admin'
+
+  const puedeCorroborar = capsLoaded
+    ? canSync(usuario, 'finanzas', 'fin.teso.cierre.corroborar') !== false
+    : usuario?.rol === 'admin'
+
+  // sucursalFiltro: null = ve todas, 'suc-lg' = solo esa sucursal
+  const sucursalFiltro = capsLoaded
+    ? userScopeSync(usuario, 'finanzas', 'fin.teso.cierre.corroborar')
+    : null
+
   const [sucursales, setSucursales] = useState([])
   const [sucursalSel, setSucursalSel] = useState(esAdmin ? 'suc-lg' : (usuario.sucursal_id ?? ''))
   const [fecha, setFecha] = useState(todayISO())
@@ -263,9 +302,6 @@ export function CierreDelDiaTab({ usuario }) {
   const [cierres, setCierres] = useState([])
   const [loadingCierres, setLoadingCierres] = useState(false)
 
-  // Mapa bsale_user_id → usuario local (para declarar en nombre de otro vendedor)
-  const [bsaleUserMap, setBsaleUserMap] = useState({})
-
   // Panel lateral
   const [panelVendedor, setPanelVendedor] = useState(null) // { bsaleUser, cierre }
   const [savingCorrob, setSavingCorrob] = useState(false)
@@ -276,21 +312,15 @@ export function CierreDelDiaTab({ usuario }) {
   useEffect(() => {
     fetchSucursales().then(setSucursales).catch(() => {})
     fetchUmbrales().then(setUmbrales).catch(() => {})
-    // Mapa bsale_user_id → usuario local
-    supabase.from('usuarios').select('id, nombre, bsale_user_id').then(({ data }) => {
-      const m = {}
-      for (const u of data ?? []) if (u.bsale_user_id) m[String(u.bsale_user_id)] = u
-      setBsaleUserMap(m)
-    })
   }, [])
 
-  // Cargar datos BSALE
-  const cargarBsale = useCallback(async () => {
+  // Cargar datos BSALE (cache-first; opción forzar=true salta cache)
+  const cargarBsale = useCallback(async (forzar = false) => {
     if (!sucursalSel) return
     setLoadingBsale(true)
     setBsaleData(null)
     try {
-      const data = await fetchBsaleDia(fecha, sucursalSel)
+      const data = await fetchBsaleDia(fecha, sucursalSel, forzar)
       setBsaleData(data)
     } catch (e) {
       toast.error('Error al cargar BSALE')
@@ -306,7 +336,9 @@ export function CierreDelDiaTab({ usuario }) {
         .eq('fecha', fecha)
         .eq('sucursal_id', sucursalSel)
         .neq('estado', 'anulado')
-      if (!esAdmin) q = q.eq('vendedor_id', usuario.id)
+      // RBAC-4: filtrar por sucursal si el rol tiene scope_filter='sucursal'
+      if (sucursalFiltro) q = q.eq('sucursal_id', sucursalFiltro)
+      if (!esAdmin && !puedeCorroborar) q = q.eq('vendedor_id', usuario.id)
       const { data, error } = await q
       if (error) throw error
 
@@ -416,9 +448,10 @@ export function CierreDelDiaTab({ usuario }) {
             <input type="date" style={inputSt} value={fecha} onChange={e => setFecha(e.target.value)} />
           </div>
           <div style={{ alignSelf: 'flex-end' }}>
-            <button onClick={() => { cargarBsale(); cargarCierres() }}
+            <button onClick={() => { cargarBsale(true); cargarCierres() }}
               style={{ ...btnSt('#6B7280'), padding: '8px 14px' }}
-              disabled={loadingBsale || loadingCierres}>
+              disabled={loadingBsale || loadingCierres}
+              title="Refrescar desde BSALE (fuerza re-sincronización)">
               {(loadingBsale || loadingCierres)
                 ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
                 : <RefreshCw size={14} />}
@@ -568,7 +601,7 @@ export function CierreDelDiaTab({ usuario }) {
           <aside style={{
             width: 520, maxWidth: '100%', height: '100%', background: '#fff',
             display: 'flex', flexDirection: 'column',
-            boxShadow: '-4px 0 32px rgba(0,0,0,0.15)'
+            boxShadow: '-4px 0 32px rgba(0,0,0,0.15)', overflowY: 'auto'
           }}>
 
             {/* Header panel */}
@@ -585,7 +618,7 @@ export function CierreDelDiaTab({ usuario }) {
               </button>
             </div>
 
-            <div style={{ flex: 1, padding: '16px 20px', overflowY: 'auto', minHeight: 0 }}>
+            <div style={{ flex: 1, padding: '16px 20px', overflowY: 'auto' }}>
 
               {/* Si es el propio vendedor o no hay cierre → panel declaración */}
               {(!esAdmin || !panelVendedor.cierre || panelVendedor.cierre.estado === 'declarado') && !panelVendedor.cierre && (
@@ -595,7 +628,6 @@ export function CierreDelDiaTab({ usuario }) {
                   sucursalId={sucursalSel}
                   fecha={fecha}
                   usuario={usuario}
-                  vendedorLocal={panelVendedor.bsaleUser ? (bsaleUserMap[String(panelVendedor.bsaleUser.bsale_user_id)] ?? null) : null}
                   umbrales={umbrales}
                   onGuardado={result => {
                     setCierres(prev => {
@@ -637,11 +669,6 @@ export function CierreDelDiaTab({ usuario }) {
                           <span>{fmt(Number(panelVendedor.cierre[med.key] ?? 0))}</span>
                         </div>
                       ))}
-                      {/* Subtotal Getnet (Crédito + Débito) — para conciliar con liquidación Getnet */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', marginTop: 4, fontSize: 12, background: '#EFF6FF', borderRadius: 6, color: '#1D4ED8', fontWeight: 600 }}>
-                        <span>↳ Total Getnet (Crédito + Débito)</span>
-                        <span>{fmt(Number(panelVendedor.cierre.t_credito ?? 0) + Number(panelVendedor.cierre.t_debito ?? 0))}</span>
-                      </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #E5E7EB', marginTop: 6, paddingTop: 6, fontWeight: 700, fontSize: 13 }}>
                         <span>Total declarado</span>
                         <span>{fmt(Number(panelVendedor.cierre.total_declarado ?? 0))}</span>
@@ -652,18 +679,7 @@ export function CierreDelDiaTab({ usuario }) {
                   {/* Corroboración admin */}
                   {panelVendedor.cierre.estado === 'declarado' && valoresCorrob && (
                     <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Corroborar</div>
-                        <button
-                          onClick={() => {
-                            const v = {}
-                            for (const med of MEDIOS) v[med.key + '_corrob'] = Number(panelVendedor.cierre[med.key] ?? 0)
-                            setValoresCorrob(v)
-                          }}
-                          style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-                          ↺ Igualar declarado
-                        </button>
-                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Corroborar</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {MEDIOS.map(med => (
                           <div key={med.key} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', alignItems: 'center', gap: 8 }}>
@@ -687,7 +703,7 @@ export function CierreDelDiaTab({ usuario }) {
                         <label style={labelSt}>Observaciones admin {diferenciaPanel !== 0 && <span style={{ color: '#DC2626' }}>*</span>}</label>
                         <textarea value={obsAdmin} onChange={e => setObsAdmin(e.target.value)} rows={2}
                           placeholder={diferenciaPanel !== 0 ? 'Obligatorio: explica la diferencia' : 'Opcional'}
-                          style={{ ...inputSt, resize: 'none', fontFamily: 'inherit', borderColor: obsRequerida ? '#DC2626' : '#D1D5DB', maxHeight: 80 }} />
+                          style={{ ...inputSt, resize: 'vertical', fontFamily: 'inherit', borderColor: obsRequerida ? '#DC2626' : '#D1D5DB' }} />
                       </div>
                     </div>
                   )}
@@ -702,7 +718,7 @@ export function CierreDelDiaTab({ usuario }) {
             </div>
 
             {/* Footer panel */}
-            <div style={{ padding: '12px 20px 70px 20px', borderTop: '1px solid #F3F4F6', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, flexShrink: 0, background: '#fff' }}>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #F3F4F6', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button onClick={() => setPanelVendedor(null)} style={btnOutlineSt}>Cerrar</button>
               {esAdmin && panelVendedor.cierre?.estado === 'declarado' && valoresCorrob && (
                 <button onClick={handleCorrob} disabled={savingCorrob || obsRequerida}

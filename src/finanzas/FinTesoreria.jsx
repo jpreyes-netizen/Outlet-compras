@@ -1,23 +1,34 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabase'
+import { preloadCaps, canSync } from '../core/permisos'
 import { CierreDelDiaTab } from './tesoreria/CierreDelDiaTab'
 import { DepositosAbonosTab } from './tesoreria/DepositosAbonosTab'
 import { AnalisisTab } from './tesoreria/AnalisisTab'
 import { CartolaBancariaTab } from './tesoreria/CartolaBancariaTab'
 
+// RBAC-4: sub-tabs vinculados a capabilities
 const ALL_TABS = [
-  { k: 'cierre',    l: 'Cierre del día',    roles: ['admin','dir_general','dir_finanzas','tesorero','cajero'] },
-  { k: 'depositos', l: 'Depósitos y abonos', roles: ['admin','dir_general','dir_finanzas','tesorero','cajero'] },
-  { k: 'cartola',   l: 'Cartola bancaria',   roles: ['admin','dir_general','dir_finanzas','tesorero'] },
-  { k: 'analisis',  l: 'Análisis',           roles: ['admin','dir_general','dir_finanzas','tesorero'] },
+  { k: 'cierre',    l: 'Cierre del día',     cap: 'fin.teso.cierre' },
+  { k: 'depositos', l: 'Depósitos y abonos', cap: 'fin.teso.depositos' },
+  { k: 'cartola',   l: 'Cartola bancaria',   cap: 'fin.teso.cartola' },
+  { k: 'analisis',  l: 'Análisis',           cap: 'fin.teso.analisis' },
 ]
 
 export function FinTesoreria({ cu, isMobile, rol }) {
-  const rolActual = rol || cu?.rol || 'cajero'
-  const TABS = ALL_TABS.filter(t => t.roles.includes(rolActual) || rolActual === 'admin')
   const [tab, setTab] = useState('cierre')
   const [usuario, setUsuario] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [capsLoaded, setCapsLoaded] = useState(false)
+
+  // Precargar capabilities al montar
+  useEffect(() => {
+    if (cu?.id) preloadCaps(cu, 'finanzas').then(() => setCapsLoaded(true))
+  }, [cu?.id])
+
+  // RBAC-4: filtrar sub-tabs por capabilities dinámicas
+  const TABS = capsLoaded
+    ? ALL_TABS.filter(t => canSync(cu, 'finanzas', t.cap) !== false)
+    : ALL_TABS.filter(t => t.cap === 'fin.teso.cierre')  // fallback: solo cierre mientras carga
 
   useEffect(() => {
     supabase.from('usuarios').select('id, nombre, rol, sucursal_id').eq('id', cu.id).maybeSingle()
