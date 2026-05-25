@@ -1,4 +1,5 @@
 import{useState,useEffect,useMemo,useCallback}from'react'
+import{preloadCaps,canSync}from'./core/permisos'
 import{supabase,signIn,signOut,getSession}from'./supabase'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
@@ -291,6 +292,7 @@ export default function App(){
   const[moreOpen,setMoreOpen]=useState(false)
   const[appActual,setAppActual]=useState(()=>{try{return localStorage.getItem("outlet_app_actual")||null}catch(e){return null}})
   const[recoveryMode,setRecoveryMode]=useState(false)
+  const[capsLoaded,setCapsLoaded]=useState(false)
   useEffect(()=>{
     const onResize=()=>setIsMobile(window.innerWidth<768)
     window.addEventListener("resize",onResize)
@@ -314,6 +316,12 @@ export default function App(){
   },[])
 
   useEffect(()=>{loadUsers()},[])  // Solo carga usuarios para el login — loadAll se dispara post-auth
+
+  // RBAC-5: precargar capabilities de Compras cuando hay usuario autenticado
+  useEffect(()=>{
+    if(cu?.id) preloadCaps(cu,'compras').then(()=>setCapsLoaded(true))
+    else setCapsLoaded(false)
+  },[cu?.id])
 
   // Persistencia de sesion via Supabase Auth (unico metodo valido desde v52)
   useEffect(()=>{
@@ -400,7 +408,29 @@ export default function App(){
   }
   const updOC=async(id,up)=>{await supabase.from('ordenes_compra').update(up).eq('id',id);setOcs(p=>p.map(o=>o.id===id?{...o,...up}:o))}
   const saveConfig=async(k,v)=>{await supabase.from('config_sistema').upsert({clave:k,valor:v},{onConflict:'clave'});setConfig(p=>({...p,[k]:v}))}
-  const h=p=>cu?hp(cu,p):false
+  // RBAC-5: h() ahora usa capabilities dinámicas cuando están disponibles
+  // El mapeo cap_id convierte permisos string legacy a IDs del nuevo sistema
+  const CAP_MAP = {
+    'crear_oc':    'cmp.crear_oc',
+    'aprobar_neg': 'cmp.aprobar_neg',
+    'aprobar_fin': 'cmp.aprobar_fin',
+    'gest_imp':    'cmp.gest_imp',
+    'valid_prov':  'cmp.valid_prov',
+    'reg_pago':    'cmp.reg_pago',
+    'recibir':     'cmp.recibir',
+    'cerrar_oc':   'cmp.cerrar_oc',
+    'ver_fin':     'cmp.finanzas',
+    'config':      'cmp.config',
+  }
+  const h=p=>{
+    if(!cu) return false
+    if(capsLoaded){
+      const capId = CAP_MAP[p]
+      if(capId) return canSync(cu,'compras',capId) !== false
+    }
+    // Fallback al sistema legado mientras caps cargan o para permisos no mapeados
+    return hp(cu,p)
+  }
 
   // ⭐ v48: Helper de notificaciones basado en tabla config_notificaciones
   // Consulta qué usuario recibe según el estado destino + opcional CC al admin
