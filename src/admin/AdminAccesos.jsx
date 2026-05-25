@@ -148,7 +148,7 @@ export function AdminAccesos({ cu, isMobile }) {
   }, [usuarios, appsActivas, accesos, accesoMap])
 
   if (loading) {
-    return <div style={{ textAlign: "center", padding: 40, color: "#8E8E93" }}>Cargando matriz...</div>
+    return <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>Cargando matriz...</div>
   }
 
   return (
@@ -157,9 +157,9 @@ export function AdminAccesos({ cu, isMobile }) {
       {mensaje && (
         <div style={{
           padding: "10px 14px", borderRadius: 10, marginBottom: 12, fontSize: 13, fontWeight: 500,
-          background: mensaje.tipo === "error" ? "#FF3B3010" : "#34C75910",
-          color: mensaje.tipo === "error" ? "#FF3B30" : "#34C759",
-          border: `1px solid ${mensaje.tipo === "error" ? "#FF3B3030" : "#34C75930"}`,
+          background: mensaje.tipo === "error" ? "var(--danger-bg)" : "var(--success)10",
+          color: mensaje.tipo === "error" ? "var(--danger)" : "var(--success)",
+          border: `1px solid ${mensaje.tipo === "error" ? "var(--danger-bg)" : "var(--success-bg)"}`,
           display: "flex", justifyContent: "space-between", alignItems: "center"
         }}>
           <span>{mensaje.tipo === "error" ? "⚠️" : "✓"} {mensaje.txt}</span>
@@ -168,63 +168,63 @@ export function AdminAccesos({ cu, isMobile }) {
       )}
 
       {error && (
-        <div style={{ padding: "10px 14px", borderRadius: 10, background: "#FF3B3010", color: "#FF3B30", marginBottom: 12, fontSize: 13 }}>
+        <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--danger-bg)", color: "var(--danger)", marginBottom: 12, fontSize: 13 }}>
           {error}
         </div>
       )}
 
       {/* KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 8, marginBottom: 14 }}>
-        <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>Usuarios activos</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#1C1C1E" }}>{usuarios.length}</div>
+        <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Usuarios activos</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)" }}>{usuarios.length}</div>
         </div>
-        <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>Apps activas</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#1C1C1E" }}>{appsActivas.length}</div>
+        <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Apps activas</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)" }}>{appsActivas.length}</div>
         </div>
-        <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>Accesos asignados</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#34C759" }}>{stats.asignados}</div>
-          <div style={{ fontSize: 11, color: "#8E8E93", marginTop: 2 }}>{stats.cobertura}% cobertura</div>
+        <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Accesos asignados</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--success)" }}>{stats.asignados}</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{stats.cobertura}% cobertura</div>
         </div>
-        <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>Sin acceso a nada</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: stats.sinAcceso > 0 ? "#FF9500" : "#8E8E93" }}>{stats.sinAcceso}</div>
+        <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Sin acceso a nada</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: stats.sinAcceso > 0 ? "var(--warning)" : "var(--text-muted)" }}>{stats.sinAcceso}</div>
         </div>
       </div>
 
       {/* Toolbar */}
-      <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 12, border: "1px solid rgba(0,0,0,0.04)" }}>
+      <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: 12, marginBottom: 12, border: "1px solid rgba(0,0,0,0.04)" }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
           <input
             type="text"
             placeholder="Buscar usuario..."
             value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
-            style={{ flex: "1 1 240px", padding: "9px 14px", borderRadius: 10, border: "1px solid #E5E5EA", fontSize: 13, outline: "none" }}
+            style={{ flex: "1 1 240px", padding: "9px 14px", borderRadius: 10, border: "1px solid var(--border-2)", fontSize: 13, outline: "none" }}
           />
-          <label style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 10, background: filtroSinAcceso ? "#FF950015" : "#F8F8FA", border: "1px solid " + (filtroSinAcceso ? "#FF950030" : "#E5E5EA"), cursor: "pointer", fontSize: 13, fontWeight: 600, color: filtroSinAcceso ? "#FF9500" : "#3A3A3C" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 10, background: filtroSinAcceso ? "var(--warning-bg)" : "var(--bg-surface-2)", border: "1px solid " + (filtroSinAcceso ? "var(--warning)30" : "var(--border-2)"), cursor: "pointer", fontSize: 13, fontWeight: 600, color: filtroSinAcceso ? "var(--warning)" : "var(--text-secondary)" }}>
             <input type="checkbox" checked={filtroSinAcceso} onChange={e => setFiltroSinAcceso(e.target.checked)} style={{ cursor: "pointer" }} />
             Solo sin acceso
           </label>
         </div>
-        <div style={{ fontSize: 11, color: "#8E8E93", marginTop: 8 }}>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
           Mostrando <strong>{usuariosFiltrados.length}</strong> usuarios. Click en una celda para asignar, cambiar o quitar acceso.
         </div>
       </div>
 
       {/* MATRIZ */}
-      <div style={{ background: "#fff", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(0,0,0,0.04)" }}>
+      <div style={{ background: "var(--bg-surface)", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(0,0,0,0.04)" }}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
             <thead>
-              <tr style={{ background: "#F8F8FA", borderBottom: "2px solid #E5E5EA" }}>
-                <th style={{ padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#8E8E93", textTransform: "uppercase", letterSpacing: "0.04em", position: "sticky", left: 0, background: "#F8F8FA", zIndex: 2 }}>
+              <tr style={{ background: "var(--bg-surface-2)", borderBottom: "2px solid var(--border-2)" }}>
+                <th style={{ padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", position: "sticky", left: 0, background: "var(--bg-surface-2)", zIndex: 2 }}>
                   Usuario
                 </th>
                 {appsActivas.map(app => (
-                  <th key={app.codigo} style={{ padding: "12px 10px", textAlign: "center", fontSize: 11, fontWeight: 700, color: "#8E8E93", textTransform: "uppercase", letterSpacing: "0.04em", minWidth: 110 }}>
+                  <th key={app.codigo} style={{ padding: "12px 10px", textAlign: "center", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", minWidth: 110 }}>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
                       <span style={{ fontSize: 16 }}>{app.icono}</span>
                       <span>{app.nombre}</span>
@@ -235,19 +235,19 @@ export function AdminAccesos({ cu, isMobile }) {
             </thead>
             <tbody>
               {usuariosFiltrados.length === 0 ? (
-                <tr><td colSpan={appsActivas.length + 1} style={{ padding: 32, textAlign: "center", color: "#8E8E93", fontSize: 13 }}>
+                <tr><td colSpan={appsActivas.length + 1} style={{ padding: 32, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
                   No hay usuarios que coincidan con los filtros
                 </td></tr>
               ) : usuariosFiltrados.map(u => (
-                <tr key={u.id} style={{ borderBottom: "1px solid #F2F2F7" }}>
-                  <td style={{ padding: "8px 14px", position: "sticky", left: 0, background: "#fff", zIndex: 1 }}>
+                <tr key={u.id} style={{ borderBottom: "1px solid var(--bg-hover)" }}>
+                  <td style={{ padding: "8px 14px", position: "sticky", left: 0, background: "var(--bg-surface)", zIndex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: 14, background: "#1C1C1E20", color: "#1C1C1E", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 14, background: "var(--text-primary)20", color: "var(--text-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                         {u.avatar || (u.nombre || "?").split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase()}
                       </div>
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#1C1C1E" }}>{u.nombre}</div>
-                        {!isMobile && <div style={{ fontSize: 10, color: "#8E8E93" }}>{u.correo}</div>}
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{u.nombre}</div>
+                        {!isMobile && <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{u.correo}</div>}
                       </div>
                     </div>
                   </td>
@@ -264,9 +264,9 @@ export function AdminAccesos({ cu, isMobile }) {
                             fontSize: 11,
                             fontWeight: 600,
                             cursor: "pointer",
-                            border: "1px solid " + (rol ? rol.color + "40" : "#E5E5EA"),
-                            background: rol ? rol.color + "15" : "#F8F8FA",
-                            color: rol ? rol.color : "#C7C7CC",
+                            border: "1px solid " + (rol ? rol.color + "40" : "var(--border-2)"),
+                            background: rol ? rol.color + "15" : "var(--bg-surface-2)",
+                            color: rol ? rol.color : "var(--border-3)",
                             minWidth: 90,
                             transition: "all 0.15s"
                           }}
@@ -287,34 +287,34 @@ export function AdminAccesos({ cu, isMobile }) {
       {/* MODAL EDITOR */}
       {editando && (
         <div onClick={cerrarEditor} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 20, padding: 28, width: "100%", maxWidth: 480 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--bg-surface)", borderRadius: 20, padding: 28, width: "100%", maxWidth: 480 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
               <div>
-                <div style={{ fontSize: 11, color: "#8E8E93", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Editar acceso</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#1C1C1E", marginTop: 4 }}>{editando.usuario.nombre}</div>
-                <div style={{ fontSize: 12, color: "#8E8E93", marginTop: 2 }}>{editando.usuario.correo}</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Editar acceso</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", marginTop: 4 }}>{editando.usuario.nombre}</div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>{editando.usuario.correo}</div>
                 <div style={{ marginTop: 10, padding: "6px 12px", display: "inline-flex", alignItems: "center", gap: 6, background: editando.app.color + "15", borderRadius: 8, color: editando.app.color, fontSize: 13, fontWeight: 600 }}>
                   <span>{editando.app.icono}</span>
                   <span>{editando.app.nombre}</span>
                 </div>
               </div>
-              <button onClick={cerrarEditor} style={{ width: 32, height: 32, borderRadius: 16, background: "#F2F2F7", border: "none", cursor: "pointer", fontSize: 14 }}>×</button>
+              <button onClick={cerrarEditor} style={{ width: 32, height: 32, borderRadius: 16, background: "var(--bg-hover)", border: "none", cursor: "pointer", fontSize: 14 }}>×</button>
             </div>
 
             <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#3A3A3C", marginBottom: 8 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 8 }}>
                 Rol en esta app
               </label>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: "1px solid " + (rolElegido === "" ? "#FF3B30" : "#E5E5EA"), background: rolElegido === "" ? "#FF3B3008" : "#fff", cursor: "pointer" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: "1px solid " + (rolElegido === "" ? "var(--danger)" : "var(--border-2)"), background: rolElegido === "" ? "var(--danger)08" : "var(--bg-surface)", cursor: "pointer" }}>
                   <input type="radio" name="rol" checked={rolElegido === ""} onChange={() => setRolElegido("")} />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#FF3B30" }}>Sin acceso (revocar)</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--danger)" }}>Sin acceso (revocar)</span>
                 </label>
                 {(rolesPorApp[editando.app.codigo] || []).map(r => (
-                  <label key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: "1px solid " + (rolElegido === r.id ? r.color : "#E5E5EA"), background: rolElegido === r.id ? r.color + "10" : "#fff", cursor: "pointer" }}>
+                  <label key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: "1px solid " + (rolElegido === r.id ? r.color : "var(--border-2)"), background: rolElegido === r.id ? r.color + "10" : "var(--bg-surface)", cursor: "pointer" }}>
                     <input type="radio" name="rol" checked={rolElegido === r.id} onChange={() => setRolElegido(r.id)} />
                     <div style={{ width: 8, height: 8, borderRadius: 4, background: r.color }} />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: rolElegido === r.id ? r.color : "#1C1C1E" }}>{r.nombre}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: rolElegido === r.id ? r.color : "var(--text-primary)" }}>{r.nombre}</span>
                   </label>
                 ))}
               </div>
@@ -322,24 +322,24 @@ export function AdminAccesos({ cu, isMobile }) {
 
             {rolElegido && sucursales.length > 0 && (
               <div style={{ marginBottom: 14 }}>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#3A3A3C", marginBottom: 6 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
                   Sucursal asignada (opcional)
                 </label>
-                <select value={sucursalElegida} onChange={e => setSucursalElegida(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #E5E5EA", fontSize: 13, background: "#fff" }}>
+                <select value={sucursalElegida} onChange={e => setSucursalElegida(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border-2)", fontSize: 13, background: "var(--bg-surface)" }}>
                   <option value="">Todas las sucursales (sin restricción)</option>
                   {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre} ({s.codigo})</option>)}
                 </select>
-                <div style={{ fontSize: 11, color: "#8E8E93", marginTop: 4 }}>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
                   Si seleccionas una sucursal, el usuario solo verá datos de esa sucursal en esta app.
                 </div>
               </div>
             )}
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20 }}>
-              <button onClick={cerrarEditor} style={{ padding: "10px 18px", borderRadius: 10, background: "#F2F2F7", color: "#3A3A3C", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              <button onClick={cerrarEditor} style={{ padding: "10px 18px", borderRadius: 10, background: "var(--bg-hover)", color: "var(--text-secondary)", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 Cancelar
               </button>
-              <button disabled={guardando} onClick={guardarAcceso} style={{ padding: "10px 18px", borderRadius: 10, background: guardando ? "#8E8E93" : "#1C1C1E", color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: guardando ? "default" : "pointer" }}>
+              <button disabled={guardando} onClick={guardarAcceso} style={{ padding: "10px 18px", borderRadius: 10, background: guardando ? "var(--text-muted)" : "var(--text-primary)", color: "var(--bg-surface)", border: "none", fontSize: 13, fontWeight: 600, cursor: guardando ? "default" : "pointer" }}>
                 {guardando ? "Guardando..." : "Guardar"}
               </button>
             </div>

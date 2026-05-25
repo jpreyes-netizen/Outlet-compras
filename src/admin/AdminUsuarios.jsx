@@ -3,29 +3,29 @@ import { supabase } from '../supabase'
 
 const ROLES_LEGADO = [
   // Roles ERP Compras
-  { k: "admin",            l: "Admin",            c: "#FF3B30" },
-  { k: "dir_general",      l: "Dir. General",     c: "#FF3B30" },
-  { k: "dir_finanzas",     l: "Dir. Finanzas",    c: "#AF52DE" },
-  { k: "dir_negocios",     l: "Dir. Negocios",    c: "#007AFF" },
-  { k: "dir_operaciones",  l: "Dir. Operaciones", c: "#5AC8FA" },
-  { k: "analista",         l: "Analista",         c: "#34C759" },
-  { k: "jefe_bodega",      l: "Jefe Bodega",      c: "#FF9500" },
-  { k: "jefe_operaciones", l: "Jefe Operaciones", c: "#FF9500" },
-  { k: "directorio",       l: "Directorio",       c: "#8E8E93" },
-  { k: "cajero",           l: "Cajero/Vendedor",  c: "#34C759" },
+  { k: "admin",            l: "Admin",            c: "var(--danger)" },
+  { k: "dir_general",      l: "Dir. General",     c: "var(--danger)" },
+  { k: "dir_finanzas",     l: "Dir. Finanzas",    c: "var(--purple)" },
+  { k: "dir_negocios",     l: "Dir. Negocios",    c: "var(--accent)" },
+  { k: "dir_operaciones",  l: "Dir. Operaciones", c: "var(--info)" },
+  { k: "analista",         l: "Analista",         c: "var(--success)" },
+  { k: "jefe_bodega",      l: "Jefe Bodega",      c: "var(--warning)" },
+  { k: "jefe_operaciones", l: "Jefe Operaciones", c: "var(--warning)" },
+  { k: "directorio",       l: "Directorio",       c: "var(--text-muted)" },
+  { k: "cajero",           l: "Cajero/Vendedor",  c: "var(--success)" },
   // Roles Finanzas
-  { k: "tesorero",         l: "Tesorero",         c: "#AF52DE" },
-  { k: "lector",           l: "Lector",           c: "#8E8E93" },
+  { k: "tesorero",         l: "Tesorero",         c: "var(--purple)" },
+  { k: "lector",           l: "Lector",           c: "var(--text-muted)" },
   // Roles compartidos
-  { k: "jefe_tienda",      l: "Jefe de Tienda",   c: "#FF9500" },
-  { k: "gerencia",         l: "Gerencia",         c: "#FF3B30" },
+  { k: "jefe_tienda",      l: "Jefe de Tienda",   c: "var(--warning)" },
+  { k: "gerencia",         l: "Gerencia",         c: "var(--danger)" },
   // Roles Postventa
-  { k: "postventa",        l: "Ejecutivo PV",     c: "#007AFF" },
-  { k: "operaciones",      l: "Operaciones",      c: "#34C759" },
-  { k: "caja",             l: "Caja",             c: "#AF52DE" }
+  { k: "postventa",        l: "Ejecutivo PV",     c: "var(--accent)" },
+  { k: "operaciones",      l: "Operaciones",      c: "var(--success)" },
+  { k: "caja",             l: "Caja",             c: "var(--purple)" }
 ]
 
-const rolInfo = k => ROLES_LEGADO.find(r => r.k === k) || { k, l: k, c: "#8E8E93" }
+const rolInfo = k => ROLES_LEGADO.find(r => r.k === k) || { k, l: k, c: "var(--text-muted)" }
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -255,7 +255,7 @@ export function AdminUsuarios({ cu, isMobile }) {
   }, [usuarios])
 
   if (loading) {
-    return <div style={{ textAlign: "center", padding: 40, color: "#8E8E93" }}>Cargando usuarios...</div>
+    return <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>Cargando usuarios...</div>
   }
 
   return (
@@ -268,9 +268,9 @@ export function AdminUsuarios({ cu, isMobile }) {
           marginBottom: 12,
           fontSize: 13,
           fontWeight: 500,
-          background: mensaje.tipo === "error" ? "#FF3B3010" : "#34C75910",
-          color: mensaje.tipo === "error" ? "#FF3B30" : "#34C759",
-          border: `1px solid ${mensaje.tipo === "error" ? "#FF3B3030" : "#34C75930"}`,
+          background: mensaje.tipo === "error" ? "var(--danger-bg)" : "var(--success)10",
+          color: mensaje.tipo === "error" ? "var(--danger)" : "var(--success)",
+          border: `1px solid ${mensaje.tipo === "error" ? "var(--danger-bg)" : "var(--success-bg)"}`,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center"
@@ -281,111 +281,111 @@ export function AdminUsuarios({ cu, isMobile }) {
       )}
 
       {error && (
-        <div style={{ padding: "10px 14px", borderRadius: 10, background: "#FF3B3010", color: "#FF3B30", marginBottom: 12, fontSize: 13 }}>
+        <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--danger-bg)", color: "var(--danger)", marginBottom: 12, fontSize: 13 }}>
           {error}
         </div>
       )}
 
       {/* KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(4, 1fr)", gap: 8, marginBottom: 14 }}>
-        <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>Total</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#1C1C1E" }}>{stats.total}</div>
+        <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Total</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)" }}>{stats.total}</div>
         </div>
-        <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>Activos</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#34C759" }}>{stats.activos}</div>
+        <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Activos</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--success)" }}>{stats.activos}</div>
         </div>
-        <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>Inactivos</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#8E8E93" }}>{stats.inactivos}</div>
+        <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Inactivos</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text-muted)" }}>{stats.inactivos}</div>
         </div>
         {!isMobile && (
-          <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
-            <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>Roles únicos</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "#1C1C1E" }}>{Object.keys(stats.porRol).length}</div>
+          <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Roles únicos</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)" }}>{Object.keys(stats.porRol).length}</div>
           </div>
         )}
       </div>
 
       {/* Toolbar */}
-      <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 12, border: "1px solid rgba(0,0,0,0.04)" }}>
+      <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: 12, marginBottom: 12, border: "1px solid rgba(0,0,0,0.04)" }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
           <input
             type="text"
             placeholder="Buscar por nombre, correo o ID..."
             value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
-            style={{ flex: "1 1 240px", padding: "9px 14px", borderRadius: 10, border: "1px solid #E5E5EA", fontSize: 13, outline: "none" }}
+            style={{ flex: "1 1 240px", padding: "9px 14px", borderRadius: 10, border: "1px solid var(--border-2)", fontSize: 13, outline: "none" }}
           />
-          <select value={filtroRol} onChange={e => setFiltroRol(e.target.value)} style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid #E5E5EA", fontSize: 13, background: "#fff", cursor: "pointer" }}>
+          <select value={filtroRol} onChange={e => setFiltroRol(e.target.value)} style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid var(--border-2)", fontSize: 13, background: "var(--bg-surface)", cursor: "pointer" }}>
             <option value="">Todos los roles</option>
             {ROLES_LEGADO.map(r => <option key={r.k} value={r.k}>{r.l}</option>)}
           </select>
-          <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid #E5E5EA", fontSize: 13, background: "#fff", cursor: "pointer" }}>
+          <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid var(--border-2)", fontSize: 13, background: "var(--bg-surface)", cursor: "pointer" }}>
             <option value="activos">Solo activos</option>
             <option value="inactivos">Solo inactivos</option>
             <option value="todos">Todos</option>
           </select>
-          <button onClick={nuevoUsuario} style={{ padding: "9px 16px", borderRadius: 10, background: "#1C1C1E", color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+          <button onClick={nuevoUsuario} style={{ padding: "9px 16px", borderRadius: 10, background: "var(--text-primary)", color: "var(--bg-surface)", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
             <span>➕</span> Nuevo usuario
           </button>
         </div>
-        <div style={{ fontSize: 11, color: "#8E8E93", marginTop: 8 }}>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
           Mostrando <strong>{usuariosFiltrados.length}</strong> de {usuarios.length} usuarios
         </div>
       </div>
 
       {/* Tabla */}
-      <div style={{ background: "#fff", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(0,0,0,0.04)" }}>
+      <div style={{ background: "var(--bg-surface)", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(0,0,0,0.04)" }}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
-              <tr style={{ background: "#F8F8FA", borderBottom: "2px solid #E5E5EA" }}>
-                <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#8E8E93", textTransform: "uppercase", letterSpacing: "0.04em" }}>Usuario</th>
-                {!isMobile && <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#8E8E93", textTransform: "uppercase", letterSpacing: "0.04em" }}>Correo</th>}
-                <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#8E8E93", textTransform: "uppercase", letterSpacing: "0.04em" }}>Rol legado</th>
-                {!isMobile && <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#8E8E93", textTransform: "uppercase", letterSpacing: "0.04em" }}>ID</th>}
-                <th style={{ padding: "10px 14px", textAlign: "center", fontSize: 11, fontWeight: 700, color: "#8E8E93", textTransform: "uppercase", letterSpacing: "0.04em" }}>Estado</th>
-                <th style={{ padding: "10px 14px", textAlign: "right", fontSize: 11, fontWeight: 700, color: "#8E8E93", textTransform: "uppercase", letterSpacing: "0.04em" }}>Acciones</th>
+              <tr style={{ background: "var(--bg-surface-2)", borderBottom: "2px solid var(--border-2)" }}>
+                <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Usuario</th>
+                {!isMobile && <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Correo</th>}
+                <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Rol legado</th>
+                {!isMobile && <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>ID</th>}
+                <th style={{ padding: "10px 14px", textAlign: "center", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Estado</th>
+                <th style={{ padding: "10px 14px", textAlign: "right", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {usuariosFiltrados.length === 0 ? (
-                <tr><td colSpan={isMobile ? 4 : 6} style={{ padding: 32, textAlign: "center", color: "#8E8E93", fontSize: 13 }}>No hay usuarios que coincidan con los filtros</td></tr>
+                <tr><td colSpan={isMobile ? 4 : 6} style={{ padding: 32, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>No hay usuarios que coincidan con los filtros</td></tr>
               ) : usuariosFiltrados.map(u => {
                 const r = rolInfo(u.rol)
                 return (
-                  <tr key={u.id} style={{ borderBottom: "1px solid #F2F2F7", opacity: u.activo ? 1 : 0.5 }}>
+                  <tr key={u.id} style={{ borderBottom: "1px solid var(--bg-hover)", opacity: u.activo ? 1 : 0.5 }}>
                     <td style={{ padding: "10px 14px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <div style={{ width: 32, height: 32, borderRadius: 16, background: r.c + "20", color: r.c, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
                           {u.avatar || (u.nombre || "?").split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase()}
                         </div>
                         <div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: "#1C1C1E" }}>{u.nombre}</div>
-                          {isMobile && <div style={{ fontSize: 11, color: "#8E8E93" }}>{u.correo}</div>}
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{u.nombre}</div>
+                          {isMobile && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{u.correo}</div>}
                         </div>
                       </div>
                     </td>
-                    {!isMobile && <td style={{ padding: "10px 14px", fontSize: 12, color: "#3A3A3C" }}>{u.correo}</td>}
+                    {!isMobile && <td style={{ padding: "10px 14px", fontSize: 12, color: "var(--text-secondary)" }}>{u.correo}</td>}
                     <td style={{ padding: "10px 14px" }}>
                       <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, color: r.c, background: r.c + "15" }}>
                         {r.l}
                       </span>
                     </td>
-                    {!isMobile && <td style={{ padding: "10px 14px", fontSize: 11, fontFamily: "monospace", color: "#8E8E93" }}>{u.id}</td>}
+                    {!isMobile && <td style={{ padding: "10px 14px", fontSize: 11, fontFamily: "monospace", color: "var(--text-muted)" }}>{u.id}</td>}
                     <td style={{ padding: "10px 14px", textAlign: "center" }}>
-                      <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, color: u.activo ? "#34C759" : "#8E8E93", background: u.activo ? "#34C75915" : "#8E8E9315" }}>
+                      <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, color: u.activo ? "var(--success)" : "var(--text-muted)", background: u.activo ? "var(--success-bg)" : "var(--text-muted)15" }}>
                         {u.activo ? "Activo" : "Inactivo"}
                       </span>
                     </td>
                     <td style={{ padding: "10px 14px", textAlign: "right" }}>
                       <div style={{ display: "inline-flex", gap: 4 }}>
-                        <button onClick={() => editar(u)} title="Editar" style={{ padding: "6px 10px", borderRadius: 8, background: "#F2F2F7", border: "none", cursor: "pointer", fontSize: 12 }}>✏️</button>
-                        <button onClick={() => abrirReset(u)} title="Resetear clave" style={{ padding: "6px 10px", borderRadius: 8, background: "#007AFF15", border: "none", cursor: "pointer", fontSize: 12 }}>🔑</button>
-                        <button onClick={() => verComo(u)} title="Ver como este usuario" disabled={impersonando === u.id} style={{ padding: "6px 10px", borderRadius: 8, background: "#AF52DE15", border: "none", cursor: impersonando === u.id ? "default" : "pointer", fontSize: 12, opacity: impersonando === u.id ? 0.5 : 1 }}>👁</button>
-                        <button onClick={() => toggleActivo(u)} title={u.activo ? "Desactivar" : "Activar"} style={{ padding: "6px 10px", borderRadius: 8, background: "#F2F2F7", border: "none", cursor: "pointer", fontSize: 12 }}>
+                        <button onClick={() => editar(u)} title="Editar" style={{ padding: "6px 10px", borderRadius: 8, background: "var(--bg-hover)", border: "none", cursor: "pointer", fontSize: 12 }}>✏️</button>
+                        <button onClick={() => abrirReset(u)} title="Resetear clave" style={{ padding: "6px 10px", borderRadius: 8, background: "var(--accent-bg)", border: "none", cursor: "pointer", fontSize: 12 }}>🔑</button>
+                        <button onClick={() => verComo(u)} title="Ver como este usuario" disabled={impersonando === u.id} style={{ padding: "6px 10px", borderRadius: 8, background: "var(--purple-bg)", border: "none", cursor: impersonando === u.id ? "default" : "pointer", fontSize: 12, opacity: impersonando === u.id ? 0.5 : 1 }}>👁</button>
+                        <button onClick={() => toggleActivo(u)} title={u.activo ? "Desactivar" : "Activar"} style={{ padding: "6px 10px", borderRadius: 8, background: "var(--bg-hover)", border: "none", cursor: "pointer", fontSize: 12 }}>
                           {u.activo ? "🚫" : "✅"}
                         </button>
                       </div>
@@ -413,15 +413,15 @@ export function AdminUsuarios({ cu, isMobile }) {
       {/* MODAL FORM */}
       {showForm && (
         <div onClick={() => setShowForm(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 20, padding: 28, width: "100%", maxWidth: 540, maxHeight: "90vh", overflow: "auto" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--bg-surface)", borderRadius: 20, padding: 28, width: "100%", maxWidth: 540, maxHeight: "90vh", overflow: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
               <div>
-                <div style={{ fontSize: 19, fontWeight: 700, color: "#1C1C1E" }}>{editando ? "Editar usuario" : "Nuevo usuario"}</div>
-                <div style={{ fontSize: 12, color: "#8E8E93", marginTop: 2 }}>
+                <div style={{ fontSize: 19, fontWeight: 700, color: "var(--text-primary)" }}>{editando ? "Editar usuario" : "Nuevo usuario"}</div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
                   {editando ? `ID: ${editando}` : "Se generará un ID único automáticamente"}
                 </div>
               </div>
-              <button onClick={() => setShowForm(false)} style={{ width: 32, height: 32, borderRadius: 16, background: "#F2F2F7", border: "none", cursor: "pointer", fontSize: 14 }}>×</button>
+              <button onClick={() => setShowForm(false)} style={{ width: 32, height: 32, borderRadius: 16, background: "var(--bg-hover)", border: "none", cursor: "pointer", fontSize: 14 }}>×</button>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
@@ -447,7 +447,7 @@ export function AdminUsuarios({ cu, isMobile }) {
               </Campo>
             </div>
 
-            <div style={{ marginTop: 14, padding: 12, background: "#F8F8FA", borderRadius: 10 }}>
+            <div style={{ marginTop: 14, padding: 12, background: "var(--bg-surface-2)", borderRadius: 10 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
                 <input type="checkbox" checked={form.activo} onChange={e => setForm({ ...form, activo: e.target.checked })} />
                 <span><strong>Usuario activo</strong> — puede iniciar sesión en el ERP</span>
@@ -458,15 +458,15 @@ export function AdminUsuarios({ cu, isMobile }) {
               </label>
             </div>
 
-            <div style={{ padding: 12, background: "#FFF8E1", borderRadius: 10, marginTop: 12, fontSize: 12, color: "#8B6914", border: "1px solid #FFE082" }}>
+            <div style={{ padding: 12, background: "var(--warning-bg)", borderRadius: 10, marginTop: 12, fontSize: 12, color: "var(--warning-text)", border: "1px solid var(--warning-bg)" }}>
               <strong>ℹ️ Nota:</strong> El campo "Rol legado" es de compatibilidad. Los accesos reales se gestionan en el tab <strong>Accesos</strong>, donde cada usuario puede tener un rol distinto en cada app del ERP.
             </div>
 
             <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "flex-end" }}>
-              <button onClick={() => setShowForm(false)} style={{ padding: "10px 18px", borderRadius: 10, background: "#F2F2F7", color: "#3A3A3C", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              <button onClick={() => setShowForm(false)} style={{ padding: "10px 18px", borderRadius: 10, background: "var(--bg-hover)", color: "var(--text-secondary)", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 Cancelar
               </button>
-              <button disabled={guardando} onClick={guardar} style={{ padding: "10px 18px", borderRadius: 10, background: guardando ? "#8E8E93" : "#1C1C1E", color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: guardando ? "default" : "pointer" }}>
+              <button disabled={guardando} onClick={guardar} style={{ padding: "10px 18px", borderRadius: 10, background: guardando ? "var(--text-muted)" : "var(--text-primary)", color: "var(--bg-surface)", border: "none", fontSize: 13, fontWeight: 600, cursor: guardando ? "default" : "pointer" }}>
                 {guardando ? "Guardando..." : (editando ? "Guardar cambios" : "Crear usuario")}
               </button>
             </div>
@@ -481,34 +481,34 @@ export function AdminUsuarios({ cu, isMobile }) {
 function ModalResetClave({ user, pass, setPass, loading, onGuardar, onClose }) {
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 20, padding: 28, width: '100%', maxWidth: 420 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg-surface)', borderRadius: 20, padding: 28, width: '100%', maxWidth: 420 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#1C1C1E' }}>🔑 Resetear clave</div>
-            <div style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>{user?.nombre} · {user?.correo}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>🔑 Resetear clave</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{user?.nombre} · {user?.correo}</div>
           </div>
-          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 16, background: '#F2F2F7', border: 'none', cursor: 'pointer', fontSize: 14 }}>×</button>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 16, background: 'var(--bg-hover)', border: 'none', cursor: 'pointer', fontSize: 14 }}>×</button>
         </div>
-        <div style={{ padding: 12, background: '#FFF8E1', borderRadius: 10, marginBottom: 14, fontSize: 12, color: '#8B6914', border: '1px solid #FFE082' }}>
+        <div style={{ padding: 12, background: 'var(--warning-bg)', borderRadius: 10, marginBottom: 14, fontSize: 12, color: 'var(--warning-text)', border: '1px solid var(--warning-bg)' }}>
           ⚠️ Define una clave temporal y comunícasela al usuario por WhatsApp o en persona. El usuario podrá cambiarla desde el AppHub.
         </div>
         <div style={{ marginBottom: 14 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#3A3A3C', marginBottom: 6 }}>Nueva clave temporal <span style={{ color: '#FF3B30' }}>*</span></label>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Nueva clave temporal <span style={{ color: 'var(--danger)' }}>*</span></label>
           <input
             type="text"
             value={pass}
             onChange={e => setPass(e.target.value)}
             placeholder="Mínimo 8 caracteres"
-            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid #E5E5EA', fontSize: 14, outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }}
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border-2)', fontSize: 14, outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }}
             autoFocus
           />
           {pass.length > 0 && pass.length < 8 && (
-            <div style={{ fontSize: 11, color: '#FF3B30', marginTop: 4 }}>Mínimo 8 caracteres</div>
+            <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>Mínimo 8 caracteres</div>
           )}
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '10px 18px', borderRadius: 10, background: '#F2F2F7', color: '#3A3A3C', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
-          <button disabled={pass.length < 8 || loading} onClick={onGuardar} style={{ padding: '10px 18px', borderRadius: 10, background: (pass.length < 8 || loading) ? '#8E8E93' : '#007AFF', color: '#fff', border: 'none', fontSize: 13, fontWeight: 600, cursor: (pass.length < 8 || loading) ? 'default' : 'pointer' }}>
+          <button onClick={onClose} style={{ padding: '10px 18px', borderRadius: 10, background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+          <button disabled={pass.length < 8 || loading} onClick={onGuardar} style={{ padding: '10px 18px', borderRadius: 10, background: (pass.length < 8 || loading) ? 'var(--text-muted)' : 'var(--accent)', color: 'var(--bg-surface)', border: 'none', fontSize: 13, fontWeight: 600, cursor: (pass.length < 8 || loading) ? 'default' : 'pointer' }}>
             {loading ? 'Guardando...' : 'Establecer clave'}
           </button>
         </div>
@@ -520,8 +520,8 @@ function ModalResetClave({ user, pass, setPass, loading, onGuardar, onClose }) {
 function Campo({ label, req, children }) {
   return (
     <div>
-      <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#3A3A3C", marginBottom: 5 }}>
-        {label}{req && <span style={{ color: "#FF3B30" }}> *</span>}
+      <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 5 }}>
+        {label}{req && <span style={{ color: "var(--danger)" }}> *</span>}
       </label>
       {children}
     </div>
@@ -529,5 +529,5 @@ function Campo({ label, req, children }) {
 }
 
 const css = {
-  input: { width: "100%", padding: "9px 12px", borderRadius: 10, border: "1px solid #E5E5EA", fontSize: 13, background: "#fff", outline: "none" }
+  input: { width: "100%", padding: "9px 12px", borderRadius: 10, border: "1px solid var(--border-2)", fontSize: 13, background: "var(--bg-surface)", outline: "none" }
 }

@@ -68,52 +68,52 @@ export function AdminRoles({ cu, isMobile }) {
     return roles.filter(r => r.app_codigo === filtroApp)
   }, [roles, filtroApp])
 
-  const appInfo = (codigo) => apps.find(a => a.codigo === codigo) || { codigo, nombre: codigo, icono: "📱", color: "#8E8E93" }
+  const appInfo = (codigo) => apps.find(a => a.codigo === codigo) || { codigo, nombre: codigo, icono: "📱", color: "var(--text-muted)" }
 
   if (loading) {
-    return <div style={{ textAlign: "center", padding: 40, color: "#8E8E93" }}>Cargando roles...</div>
+    return <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>Cargando roles...</div>
   }
 
   return (
     <div>
       {error && (
-        <div style={{ padding: "10px 14px", borderRadius: 10, background: "#FF3B3010", color: "#FF3B30", marginBottom: 12, fontSize: 13 }}>
+        <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--danger-bg)", color: "var(--danger)", marginBottom: 12, fontSize: 13 }}>
           {error}
         </div>
       )}
 
       {/* KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 14 }}>
-        <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>Total roles</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#1C1C1E" }}>{roles.length}</div>
+        <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Total roles</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)" }}>{roles.length}</div>
         </div>
-        <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>Apps con roles</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#1C1C1E" }}>{new Set(roles.map(r => r.app_codigo)).size}</div>
+        <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Apps con roles</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)" }}>{new Set(roles.map(r => r.app_codigo)).size}</div>
         </div>
-        <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>Roles en uso</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#34C759" }}>{Object.keys(usuariosPorRol).length}</div>
+        <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Roles en uso</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--success)" }}>{Object.keys(usuariosPorRol).length}</div>
         </div>
       </div>
 
       {/* Aviso */}
-      <div style={{ padding: 12, background: "#FFF8E1", borderRadius: 10, marginBottom: 14, fontSize: 12, color: "#8B6914", border: "1px solid #FFE082" }}>
+      <div style={{ padding: 12, background: "var(--warning-bg)", borderRadius: 10, marginBottom: 14, fontSize: 12, color: "var(--warning-text)", border: "1px solid var(--warning-bg)" }}>
         <strong>ℹ️ Solo lectura:</strong> La edición de permisos requiere coordinación con el código. Si necesitas modificar permisos de un rol, contacta al desarrollador.
       </div>
 
       {/* Filtro por app */}
-      <div style={{ background: "#fff", borderRadius: 12, padding: 12, marginBottom: 12, border: "1px solid rgba(0,0,0,0.04)" }}>
+      <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: 12, marginBottom: 12, border: "1px solid rgba(0,0,0,0.04)" }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-          <span style={{ fontSize: 12, color: "#8E8E93", fontWeight: 600, marginRight: 4 }}>Filtrar:</span>
+          <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600, marginRight: 4 }}>Filtrar:</span>
           <button
             onClick={() => setFiltroApp("")}
             style={{
               padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
-              border: "1px solid " + (filtroApp === "" ? "#1C1C1E" : "#E5E5EA"),
-              background: filtroApp === "" ? "#1C1C1E" : "#fff",
-              color: filtroApp === "" ? "#fff" : "#3A3A3C"
+              border: "1px solid " + (filtroApp === "" ? "var(--text-primary)" : "var(--border-2)"),
+              background: filtroApp === "" ? "var(--text-primary)" : "var(--bg-surface)",
+              color: filtroApp === "" ? "var(--bg-surface)" : "var(--text-secondary)"
             }}
           >
             Todas
@@ -124,9 +124,9 @@ export function AdminRoles({ cu, isMobile }) {
               onClick={() => setFiltroApp(a.codigo)}
               style={{
                 padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                border: "1px solid " + (filtroApp === a.codigo ? a.color : "#E5E5EA"),
-                background: filtroApp === a.codigo ? a.color : "#fff",
-                color: filtroApp === a.codigo ? "#fff" : "#3A3A3C",
+                border: "1px solid " + (filtroApp === a.codigo ? a.color : "var(--border-2)"),
+                background: filtroApp === a.codigo ? a.color : "var(--bg-surface)",
+                color: filtroApp === a.codigo ? "var(--bg-surface)" : "var(--text-secondary)",
                 display: "inline-flex", alignItems: "center", gap: 5
               }}
             >
@@ -140,7 +140,7 @@ export function AdminRoles({ cu, isMobile }) {
       {/* Lista de roles */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {rolesFiltrados.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 40, color: "#8E8E93", fontSize: 13, background: "#fff", borderRadius: 12 }}>
+          <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)", fontSize: 13, background: "var(--bg-surface)", borderRadius: 12 }}>
             No hay roles para esta app
           </div>
         ) : rolesFiltrados.map(r => {
@@ -149,7 +149,7 @@ export function AdminRoles({ cu, isMobile }) {
           const expandido = rolExpandido === r.id
           const permisos = Array.isArray(r.permisos) ? r.permisos : []
           return (
-            <div key={r.id} style={{ background: "#fff", borderRadius: 12, border: "1px solid rgba(0,0,0,0.04)", overflow: "hidden" }}>
+            <div key={r.id} style={{ background: "var(--bg-surface)", borderRadius: 12, border: "1px solid rgba(0,0,0,0.04)", overflow: "hidden" }}>
               <button
                 onClick={() => setRolExpandido(expandido ? null : r.id)}
                 style={{ width: "100%", padding: 14, background: "none", border: "none", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 12 }}
@@ -165,38 +165,38 @@ export function AdminRoles({ cu, isMobile }) {
                 {/* Info */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: "#1C1C1E" }}>{r.nombre}</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{r.nombre}</span>
                     <span style={{ fontSize: 11, color: app.color, fontWeight: 600 }}>· {app.nombre}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: "#8E8E93", marginTop: 3, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <span>ID: <code style={{ background: "#F2F2F7", padding: "1px 5px", borderRadius: 3, fontFamily: "monospace" }}>{r.id}</code></span>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <span>ID: <code style={{ background: "var(--bg-hover)", padding: "1px 5px", borderRadius: 3, fontFamily: "monospace" }}>{r.id}</code></span>
                     <span><strong>{permisos.length}</strong> permiso(s)</span>
                     <span><strong>{numUsuarios}</strong> usuario(s)</span>
                   </div>
                 </div>
 
                 {/* Toggle */}
-                <div style={{ fontSize: 18, color: "#8E8E93", flexShrink: 0 }}>{expandido ? "−" : "+"}</div>
+                <div style={{ fontSize: 18, color: "var(--text-muted)", flexShrink: 0 }}>{expandido ? "−" : "+"}</div>
               </button>
 
               {/* Permisos */}
               {expandido && (
-                <div style={{ borderTop: "1px solid #F2F2F7", padding: 14, background: "#F8F8FA" }}>
-                  <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
+                <div style={{ borderTop: "1px solid var(--bg-hover)", padding: 14, background: "var(--bg-surface-2)" }}>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
                     Permisos del rol
                   </div>
                   {permisos.length === 0 ? (
-                    <div style={{ fontSize: 12, color: "#8E8E93", fontStyle: "italic" }}>Este rol no tiene permisos asignados.</div>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>Este rol no tiene permisos asignados.</div>
                   ) : (
                     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 6 }}>
                       {permisos.map(p => (
-                        <div key={p} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 10px", background: "#fff", borderRadius: 8, fontSize: 12 }}>
-                          <span style={{ color: "#34C759", fontSize: 14, lineHeight: 1 }}>✓</span>
+                        <div key={p} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 10px", background: "var(--bg-surface)", borderRadius: 8, fontSize: 12 }}>
+                          <span style={{ color: "var(--success)", fontSize: 14, lineHeight: 1 }}>✓</span>
                           <div>
-                            <div style={{ fontWeight: 600, color: "#1C1C1E" }}>
-                              <code style={{ background: "#F2F2F7", padding: "1px 5px", borderRadius: 3, fontFamily: "monospace", fontSize: 11 }}>{p}</code>
+                            <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                              <code style={{ background: "var(--bg-hover)", padding: "1px 5px", borderRadius: 3, fontFamily: "monospace", fontSize: 11 }}>{p}</code>
                             </div>
-                            <div style={{ color: "#8E8E93", marginTop: 2, fontSize: 11 }}>
+                            <div style={{ color: "var(--text-muted)", marginTop: 2, fontSize: 11 }}>
                               {PERMISOS_LEGIBLES[p] || "(sin descripción)"}
                             </div>
                           </div>

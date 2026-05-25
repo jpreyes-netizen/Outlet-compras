@@ -2,14 +2,14 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../supabase'
 
 const css = {
-  card:   { background:'#fff', borderRadius:16, padding:'16px 18px', boxShadow:'0 1px 3px rgba(0,0,0,0.06)', border:'1px solid rgba(0,0,0,0.04)' },
-  input:  { width:'100%', padding:'10px 14px', borderRadius:12, border:'1px solid #e5e5ea', fontSize:14, background:'#fff', outline:'none', boxSizing:'border-box' },
-  select: { width:'100%', padding:'10px 14px', borderRadius:12, border:'1px solid #e5e5ea', fontSize:14, background:'#fff', boxSizing:'border-box' },
+  card:   { background:'var(--bg-surface)', borderRadius:16, padding:'16px 18px', boxShadow:'0 1px 3px rgba(0,0,0,0.06)', border:'1px solid rgba(0,0,0,0.04)' },
+  input:  { width:'100%', padding:'10px 14px', borderRadius:12, border:'1px solid var(--border-2)', fontSize:14, background:'var(--bg-surface)', outline:'none', boxSizing:'border-box' },
+  select: { width:'100%', padding:'10px 14px', borderRadius:12, border:'1px solid var(--border-2)', fontSize:14, background:'var(--bg-surface)', boxSizing:'border-box' },
   btn:    { padding:'10px 18px', borderRadius:10, fontSize:13, fontWeight:600, border:'none', cursor:'pointer' },
 }
 
 const SCOPE_LABELS = { all:'Sin restricción', sucursal:'Solo su sucursal', propio:'Solo sus registros' }
-const SCOPE_COLORS = { all:'#34C759', sucursal:'#FF9500', propio:'#007AFF' }
+const SCOPE_COLORS = { all:'var(--success)', sucursal:'var(--warning)', propio:'var(--accent)' }
 
 export function AdminPermisos({ cu, isMobile }) {
   const [apps, setApps]             = useState([])
@@ -26,7 +26,7 @@ export function AdminPermisos({ cu, isMobile }) {
 
   // Modal nuevo rol
   const [showNuevoRol, setShowNuevoRol] = useState(false)
-  const [nuevoRol, setNuevoRol]     = useState({ codigo_rol:'', nombre:'', color:'#007AFF' })
+  const [nuevoRol, setNuevoRol]     = useState({ codigo_rol:'', nombre:'', color:'var(--accent)' })
   const [creandoRol, setCreandoRol] = useState(false)
 
   // Modal editar scope de una capability
@@ -133,14 +133,14 @@ export function AdminPermisos({ cu, isMobile }) {
       if (error) throw error
       setMensaje({ tipo:'ok', txt: `Rol ${id} creado correctamente` })
       setShowNuevoRol(false)
-      setNuevoRol({ codigo_rol:'', nombre:'', color:'#007AFF' })
+      setNuevoRol({ codigo_rol:'', nombre:'', color:'var(--accent)' })
       await cargar()
     } catch(e) { setMensaje({ tipo:'error', txt: e.message }) }
     finally { setCreandoRol(false) }
   }
 
   if (loading) return (
-    <div style={{ textAlign:'center', padding:60, color:'#8E8E93' }}>
+    <div style={{ textAlign:'center', padding:60, color:'var(--text-muted)' }}>
       Cargando permisos...
     </div>
   )
@@ -150,10 +150,10 @@ export function AdminPermisos({ cu, isMobile }) {
 
       {/* Header */}
       <div style={{ marginBottom:20 }}>
-        <div style={{ fontSize:20, fontWeight:700, color:'#1C1C1E', marginBottom:4 }}>
+        <div style={{ fontSize:20, fontWeight:700, color:'var(--text-primary)', marginBottom:4 }}>
           🔑 Gestión de Permisos
         </div>
-        <div style={{ fontSize:13, color:'#8E8E93' }}>
+        <div style={{ fontSize:13, color:'var(--text-muted)' }}>
           Selecciona un rol para ver y editar sus capabilities. Los cambios se aplican inmediatamente.
         </div>
       </div>
@@ -162,9 +162,9 @@ export function AdminPermisos({ cu, isMobile }) {
       {mensaje && (
         <div onClick={() => setMensaje(null)} style={{
           marginBottom:14, padding:'12px 16px', borderRadius:12, cursor:'pointer',
-          background: mensaje.tipo === 'ok' ? '#34C75910' : '#FF3B3010',
-          border: `1px solid ${mensaje.tipo === 'ok' ? '#34C75940' : '#FF3B3040'}`,
-          color: mensaje.tipo === 'ok' ? '#34C759' : '#FF3B30', fontSize:13
+          background: mensaje.tipo === 'ok' ? 'var(--success)10' : 'var(--danger-bg)',
+          border: `1px solid ${mensaje.tipo === 'ok' ? 'var(--success-bg)' : 'var(--danger-bg)'}`,
+          color: mensaje.tipo === 'ok' ? 'var(--success)' : 'var(--danger)', fontSize:13
         }}>
           {mensaje.tipo === 'ok' ? '✅' : '⚠️'} {mensaje.txt}
         </div>
@@ -175,7 +175,7 @@ export function AdminPermisos({ cu, isMobile }) {
         {/* Panel izquierdo — selector */}
         <div>
           <div style={{ ...css.card, marginBottom:12 }}>
-            <div style={{ fontSize:12, fontWeight:600, color:'#8E8E93', marginBottom:10 }}>APLICACIÓN</div>
+            <div style={{ fontSize:12, fontWeight:600, color:'var(--text-muted)', marginBottom:10 }}>APLICACIÓN</div>
             <select style={css.select} value={appSel} onChange={e => { setAppSel(e.target.value); setRolSel('') }}>
               <option value=''>Todas las apps</option>
               {apps.map(a => <option key={a.codigo} value={a.codigo}>{a.icono} {a.nombre}</option>)}
@@ -184,17 +184,17 @@ export function AdminPermisos({ cu, isMobile }) {
 
           <div style={{ ...css.card, marginBottom:12 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-              <div style={{ fontSize:12, fontWeight:600, color:'#8E8E93' }}>ROL</div>
+              <div style={{ fontSize:12, fontWeight:600, color:'var(--text-muted)' }}>ROL</div>
               {appSel && (
                 <button onClick={() => setShowNuevoRol(true)} style={{
                   ...css.btn, padding:'4px 10px', fontSize:11,
-                  background:'#007AFF15', color:'#007AFF'
+                  background:'var(--accent-bg)', color:'var(--accent)'
                 }}>+ Nuevo</button>
               )}
             </div>
             <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
               {rolesFiltrados.length === 0 && (
-                <div style={{ fontSize:13, color:'#AEAEB2', textAlign:'center', padding:'12px 0' }}>
+                <div style={{ fontSize:13, color:'var(--text-disabled)', textAlign:'center', padding:'12px 0' }}>
                   {appSel ? 'No hay roles para esta app' : 'Selecciona una app'}
                 </div>
               )}
@@ -202,13 +202,13 @@ export function AdminPermisos({ cu, isMobile }) {
                 <button key={r.id} onClick={() => setRolSel(r.id)} style={{
                   padding:'10px 14px', borderRadius:10, border:'none', cursor:'pointer',
                   textAlign:'left', display:'flex', alignItems:'center', gap:10,
-                  background: rolSel === r.id ? '#1C1C1E' : '#F2F2F7',
-                  color: rolSel === r.id ? '#fff' : '#1C1C1E',
+                  background: rolSel === r.id ? 'var(--text-primary)' : 'var(--bg-hover)',
+                  color: rolSel === r.id ? 'var(--bg-surface)' : 'var(--text-primary)',
                   transition:'all 0.15s'
                 }}>
                   <div style={{
                     width:10, height:10, borderRadius:5,
-                    background: rolSel === r.id ? '#fff' : (r.color || '#8E8E93'),
+                    background: rolSel === r.id ? 'var(--bg-surface)' : (r.color || 'var(--text-muted)'),
                     flexShrink:0
                   }}/>
                   <div>
@@ -231,36 +231,36 @@ export function AdminPermisos({ cu, isMobile }) {
           {!rolSel ? (
             <div style={{ ...css.card, textAlign:'center', padding:60 }}>
               <div style={{ fontSize:40, marginBottom:12 }}>🎭</div>
-              <div style={{ fontSize:16, fontWeight:600, color:'#1C1C1E', marginBottom:6 }}>
+              <div style={{ fontSize:16, fontWeight:600, color:'var(--text-primary)', marginBottom:6 }}>
                 Selecciona un rol
               </div>
-              <div style={{ fontSize:13, color:'#8E8E93' }}>
+              <div style={{ fontSize:13, color:'var(--text-muted)' }}>
                 Elige una app y un rol para gestionar sus permisos
               </div>
             </div>
           ) : (
             <div style={{ ...css.card }}>
               {/* Header del rol */}
-              <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20, paddingBottom:16, borderBottom:'1px solid #F2F2F7' }}>
-                <div style={{ width:40, height:40, borderRadius:12, background: rolObj?.color || '#8E8E93', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:700, fontSize:16 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20, paddingBottom:16, borderBottom:'1px solid var(--bg-hover)' }}>
+                <div style={{ width:40, height:40, borderRadius:12, background: rolObj?.color || 'var(--text-muted)', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--bg-surface)', fontWeight:700, fontSize:16 }}>
                   {rolObj?.nombre?.[0] || '?'}
                 </div>
                 <div>
-                  <div style={{ fontSize:17, fontWeight:700, color:'#1C1C1E' }}>{rolObj?.nombre}</div>
-                  <div style={{ fontSize:12, color:'#8E8E93' }}>{rolSel} · {Object.keys(capsDelRol).length} capabilities asignadas</div>
+                  <div style={{ fontSize:17, fontWeight:700, color:'var(--text-primary)' }}>{rolObj?.nombre}</div>
+                  <div style={{ fontSize:12, color:'var(--text-muted)' }}>{rolSel} · {Object.keys(capsDelRol).length} capabilities asignadas</div>
                 </div>
-                {guardando && <div style={{ marginLeft:'auto', fontSize:12, color:'#8E8E93' }}>Guardando...</div>}
+                {guardando && <div style={{ marginLeft:'auto', fontSize:12, color:'var(--text-muted)' }}>Guardando...</div>}
               </div>
 
               {/* Capabilities por grupo */}
               {Object.keys(capsApp).length === 0 ? (
-                <div style={{ textAlign:'center', padding:40, color:'#8E8E93', fontSize:13 }}>
+                <div style={{ textAlign:'center', padding:40, color:'var(--text-muted)', fontSize:13 }}>
                   No hay capabilities definidas para esta app
                 </div>
               ) : (
                 Object.entries(capsApp).map(([grupo, grupoCaps]) => (
                   <div key={grupo} style={{ marginBottom:20 }}>
-                    <div style={{ fontSize:11, fontWeight:700, color:'#8E8E93', letterSpacing:'0.05em', marginBottom:10, textTransform:'uppercase' }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:'var(--text-muted)', letterSpacing:'0.05em', marginBottom:10, textTransform:'uppercase' }}>
                       {grupo}
                     </div>
                     <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
@@ -271,30 +271,30 @@ export function AdminPermisos({ cu, isMobile }) {
                           <div key={cap.id} style={{
                             display:'flex', alignItems:'center', gap:12,
                             padding:'10px 14px', borderRadius:10,
-                            background: asignada ? '#34C75908' : '#F9F9F9',
-                            border: `1px solid ${asignada ? '#34C75930' : '#F2F2F7'}`,
+                            background: asignada ? 'var(--success)08' : 'var(--bg-surface-2)',
+                            border: `1px solid ${asignada ? 'var(--success-bg)' : 'var(--bg-hover)'}`,
                             transition:'all 0.15s'
                           }}>
                             {/* Checkbox */}
                             <div onClick={() => toggleCap(cap.id, scope)} style={{
                               width:20, height:20, borderRadius:6, flexShrink:0,
-                              background: asignada ? '#34C759' : '#fff',
-                              border: `2px solid ${asignada ? '#34C759' : '#C7C7CC'}`,
+                              background: asignada ? 'var(--success)' : 'var(--bg-surface)',
+                              border: `2px solid ${asignada ? 'var(--success)' : 'var(--border-3)'}`,
                               cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
                               transition:'all 0.15s'
                             }}>
-                              {asignada && <span style={{ color:'#fff', fontSize:12, fontWeight:700 }}>✓</span>}
+                              {asignada && <span style={{ color:'var(--bg-surface)', fontSize:12, fontWeight:700 }}>✓</span>}
                             </div>
 
                             {/* Info */}
                             <div style={{ flex:1, minWidth:0 }}>
-                              <div style={{ fontSize:13, fontWeight:600, color: asignada ? '#1C1C1E' : '#8E8E93' }}>
+                              <div style={{ fontSize:13, fontWeight:600, color: asignada ? 'var(--text-primary)' : 'var(--text-muted)' }}>
                                 {cap.nombre}
                               </div>
                               {cap.descripcion && (
-                                <div style={{ fontSize:11, color:'#AEAEB2', marginTop:2 }}>{cap.descripcion}</div>
+                                <div style={{ fontSize:11, color:'var(--text-disabled)', marginTop:2 }}>{cap.descripcion}</div>
                               )}
-                              <div style={{ fontSize:10, color:'#C7C7CC', marginTop:1, fontFamily:'monospace' }}>{cap.id}</div>
+                              <div style={{ fontSize:10, color:'var(--border-3)', marginTop:1, fontFamily:'monospace' }}>{cap.id}</div>
                             </div>
 
                             {/* Scope badge — solo si está asignada */}
@@ -303,8 +303,8 @@ export function AdminPermisos({ cu, isMobile }) {
                                 <button onClick={() => setEditScope({ capId: cap.id, scope })} style={{
                                   padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600,
                                   border:'none', cursor:'pointer',
-                                  background: (SCOPE_COLORS[scope] || '#8E8E93') + '20',
-                                  color: SCOPE_COLORS[scope] || '#8E8E93'
+                                  background: (SCOPE_COLORS[scope] || 'var(--text-muted)') + '20',
+                                  color: SCOPE_COLORS[scope] || 'var(--text-muted)'
                                 }}>
                                   {SCOPE_LABELS[scope] || scope} ▾
                                 </button>
@@ -325,22 +325,22 @@ export function AdminPermisos({ cu, isMobile }) {
       {/* Modal editar scope */}
       {editScope && (
         <div onClick={() => setEditScope(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', backdropFilter:'blur(8px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background:'#fff', borderRadius:20, padding:28, width:'100%', maxWidth:380 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background:'var(--bg-surface)', borderRadius:20, padding:28, width:'100%', maxWidth:380 }}>
             <div style={{ fontSize:17, fontWeight:700, marginBottom:6 }}>Cambiar alcance</div>
-            <div style={{ fontSize:12, color:'#8E8E93', marginBottom:20 }}>
+            <div style={{ fontSize:12, color:'var(--text-muted)', marginBottom:20 }}>
               Define si este permiso aplica a todos los registros o solo a los de la sucursal del usuario.
             </div>
             {Object.entries(SCOPE_LABELS).map(([key, label]) => (
               <button key={key} onClick={() => cambiarScope(editScope.capId, key)} style={{
                 width:'100%', padding:'12px 16px', borderRadius:12, marginBottom:8,
-                border: `2px solid ${editScope.scope === key ? SCOPE_COLORS[key] : '#E5E5EA'}`,
-                background: editScope.scope === key ? SCOPE_COLORS[key] + '15' : '#fff',
+                border: `2px solid ${editScope.scope === key ? SCOPE_COLORS[key] : 'var(--border-2)'}`,
+                background: editScope.scope === key ? SCOPE_COLORS[key] + '15' : 'var(--bg-surface)',
                 cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:10
               }}>
-                <div style={{ width:12, height:12, borderRadius:6, background: SCOPE_COLORS[key] || '#8E8E93', flexShrink:0 }}/>
+                <div style={{ width:12, height:12, borderRadius:6, background: SCOPE_COLORS[key] || 'var(--text-muted)', flexShrink:0 }}/>
                 <div>
-                  <div style={{ fontSize:13, fontWeight:600, color:'#1C1C1E' }}>{label}</div>
-                  <div style={{ fontSize:11, color:'#8E8E93' }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:'var(--text-primary)' }}>{label}</div>
+                  <div style={{ fontSize:11, color:'var(--text-muted)' }}>
                     {key === 'all' ? 'Ve y opera todos los registros sin filtro' :
                      key === 'sucursal' ? 'Solo ve registros de su sucursal asignada' :
                      'Solo ve sus propios registros'}
@@ -349,7 +349,7 @@ export function AdminPermisos({ cu, isMobile }) {
                 {editScope.scope === key && <span style={{ marginLeft:'auto', color: SCOPE_COLORS[key], fontWeight:700 }}>✓</span>}
               </button>
             ))}
-            <button onClick={() => setEditScope(null)} style={{ ...css.btn, width:'100%', marginTop:4, background:'#F2F2F7', color:'#3A3A3C' }}>
+            <button onClick={() => setEditScope(null)} style={{ ...css.btn, width:'100%', marginTop:4, background:'var(--bg-hover)', color:'var(--text-secondary)' }}>
               Cancelar
             </button>
           </div>
@@ -359,18 +359,18 @@ export function AdminPermisos({ cu, isMobile }) {
       {/* Modal nuevo rol */}
       {showNuevoRol && (
         <div onClick={() => setShowNuevoRol(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', backdropFilter:'blur(8px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background:'#fff', borderRadius:20, padding:28, width:'100%', maxWidth:420 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background:'var(--bg-surface)', borderRadius:20, padding:28, width:'100%', maxWidth:420 }}>
             <div style={{ fontSize:17, fontWeight:700, marginBottom:4 }}>Nuevo rol</div>
-            <div style={{ fontSize:12, color:'#8E8E93', marginBottom:20 }}>
+            <div style={{ fontSize:12, color:'var(--text-muted)', marginBottom:20 }}>
               App: <strong>{apps.find(a => a.codigo === appSel)?.nombre}</strong>
             </div>
 
             <div style={{ marginBottom:14 }}>
-              <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#3A3A3C', marginBottom:6 }}>
-                Código del rol <span style={{ color:'#FF3B30' }}>*</span>
+              <label style={{ display:'block', fontSize:12, fontWeight:600, color:'var(--text-secondary)', marginBottom:6 }}>
+                Código del rol <span style={{ color:'var(--danger)' }}>*</span>
               </label>
               <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                <div style={{ fontSize:13, color:'#8E8E93', whiteSpace:'nowrap' }}>{appSel}.</div>
+                <div style={{ fontSize:13, color:'var(--text-muted)', whiteSpace:'nowrap' }}>{appSel}.</div>
                 <input
                   style={css.input}
                   placeholder='ej: jefe_tienda'
@@ -378,14 +378,14 @@ export function AdminPermisos({ cu, isMobile }) {
                   onChange={e => setNuevoRol(p => ({ ...p, codigo_rol: e.target.value.toLowerCase().replace(/\s/g,'_') }))}
                 />
               </div>
-              <div style={{ fontSize:11, color:'#AEAEB2', marginTop:4 }}>
+              <div style={{ fontSize:11, color:'var(--text-disabled)', marginTop:4 }}>
                 ID final: <code>{appSel}.{nuevoRol.codigo_rol || 'codigo'}</code>
               </div>
             </div>
 
             <div style={{ marginBottom:14 }}>
-              <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#3A3A3C', marginBottom:6 }}>
-                Nombre visible <span style={{ color:'#FF3B30' }}>*</span>
+              <label style={{ display:'block', fontSize:12, fontWeight:600, color:'var(--text-secondary)', marginBottom:6 }}>
+                Nombre visible <span style={{ color:'var(--danger)' }}>*</span>
               </label>
               <input
                 style={css.input}
@@ -396,12 +396,12 @@ export function AdminPermisos({ cu, isMobile }) {
             </div>
 
             <div style={{ marginBottom:20 }}>
-              <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#3A3A3C', marginBottom:6 }}>Color</label>
+              <label style={{ display:'block', fontSize:12, fontWeight:600, color:'var(--text-secondary)', marginBottom:6 }}>Color</label>
               <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                {['#FF3B30','#FF9500','#007AFF','#34C759','#AF52DE','#5AC8FA','#8E8E93'].map(c => (
+                {['var(--danger)','var(--warning)','var(--accent)','var(--success)','var(--purple)','var(--info)','var(--text-muted)'].map(c => (
                   <div key={c} onClick={() => setNuevoRol(p => ({ ...p, color: c }))} style={{
                     width:32, height:32, borderRadius:16, background:c, cursor:'pointer',
-                    border: nuevoRol.color === c ? '3px solid #1C1C1E' : '3px solid transparent',
+                    border: nuevoRol.color === c ? '3px solid var(--text-primary)' : '3px solid transparent',
                     transition:'all 0.15s'
                   }}/>
                 ))}
@@ -409,13 +409,13 @@ export function AdminPermisos({ cu, isMobile }) {
             </div>
 
             <div style={{ display:'flex', gap:8 }}>
-              <button onClick={() => setShowNuevoRol(false)} style={{ ...css.btn, flex:1, background:'#F2F2F7', color:'#3A3A3C' }}>
+              <button onClick={() => setShowNuevoRol(false)} style={{ ...css.btn, flex:1, background:'var(--bg-hover)', color:'var(--text-secondary)' }}>
                 Cancelar
               </button>
               <button
                 disabled={!nuevoRol.codigo_rol || !nuevoRol.nombre || creandoRol}
                 onClick={crearRol}
-                style={{ ...css.btn, flex:2, background: (!nuevoRol.codigo_rol || !nuevoRol.nombre) ? '#8E8E93' : '#1C1C1E', color:'#fff' }}
+                style={{ ...css.btn, flex:2, background: (!nuevoRol.codigo_rol || !nuevoRol.nombre) ? 'var(--text-muted)' : 'var(--text-primary)', color:'var(--bg-surface)' }}
               >
                 {creandoRol ? 'Creando...' : 'Crear rol'}
               </button>

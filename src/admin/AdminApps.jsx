@@ -80,7 +80,7 @@ export function AdminApps({ cu, isMobile }) {
   }
 
   if (loading) {
-    return <div style={{ textAlign: "center", padding: 40, color: "#8E8E93" }}>Cargando apps...</div>
+    return <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>Cargando apps...</div>
   }
 
   const activas = apps.filter(a => a.activa).length
@@ -91,9 +91,9 @@ export function AdminApps({ cu, isMobile }) {
       {mensaje && (
         <div style={{
           padding: "10px 14px", borderRadius: 10, marginBottom: 12, fontSize: 13, fontWeight: 500,
-          background: mensaje.tipo === "error" ? "#FF3B3010" : "#34C75910",
-          color: mensaje.tipo === "error" ? "#FF3B30" : "#34C759",
-          border: `1px solid ${mensaje.tipo === "error" ? "#FF3B3030" : "#34C75930"}`,
+          background: mensaje.tipo === "error" ? "var(--danger-bg)" : "var(--success)10",
+          color: mensaje.tipo === "error" ? "var(--danger)" : "var(--success)",
+          border: `1px solid ${mensaje.tipo === "error" ? "var(--danger-bg)" : "var(--success-bg)"}`,
           display: "flex", justifyContent: "space-between", alignItems: "center"
         }}>
           <span>{mensaje.tipo === "error" ? "⚠️" : "✓"} {mensaje.txt}</span>
@@ -102,29 +102,29 @@ export function AdminApps({ cu, isMobile }) {
       )}
 
       {error && (
-        <div style={{ padding: "10px 14px", borderRadius: 10, background: "#FF3B3010", color: "#FF3B30", marginBottom: 12, fontSize: 13 }}>
+        <div style={{ padding: "10px 14px", borderRadius: 10, background: "var(--danger-bg)", color: "var(--danger)", marginBottom: 12, fontSize: 13 }}>
           {error}
         </div>
       )}
 
       {/* KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 14 }}>
-        <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>Total apps</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#1C1C1E" }}>{apps.length}</div>
+        <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Total apps</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)" }}>{apps.length}</div>
         </div>
-        <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>Activas</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#34C759" }}>{activas}</div>
+        <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Activas</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--success)" }}>{activas}</div>
         </div>
-        <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>En construcción</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#8E8E93" }}>{inactivas}</div>
+        <div style={{ background: "var(--bg-surface)", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.04)" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>En construcción</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text-muted)" }}>{inactivas}</div>
         </div>
       </div>
 
       {/* Aviso */}
-      <div style={{ padding: 12, background: "#FFF8E1", borderRadius: 10, marginBottom: 14, fontSize: 12, color: "#8B6914", border: "1px solid #FFE082" }}>
+      <div style={{ padding: 12, background: "var(--warning-bg)", borderRadius: 10, marginBottom: 14, fontSize: 12, color: "var(--warning-text)", border: "1px solid var(--warning-bg)" }}>
         <strong>ℹ️ Nota:</strong> Crear nuevas apps requiere coordinar código + SQL. Esta vista solo permite activar/desactivar apps existentes y cambiar su orden en el AppHub.
       </div>
 
@@ -135,7 +135,7 @@ export function AdminApps({ cu, isMobile }) {
           const esAdmin = app.codigo === "admin"
           return (
             <div key={app.codigo} style={{
-              background: "#fff",
+              background: "var(--bg-surface)",
               borderRadius: 12,
               padding: 16,
               border: "1px solid rgba(0,0,0,0.04)",
@@ -153,20 +153,20 @@ export function AdminApps({ cu, isMobile }) {
               {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: "#1C1C1E" }}>{app.nombre}</div>
-                  <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 12, fontSize: 10, fontWeight: 600, color: app.activa ? "#34C759" : "#8E8E93", background: app.activa ? "#34C75915" : "#8E8E9315" }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>{app.nombre}</div>
+                  <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 12, fontSize: 10, fontWeight: 600, color: app.activa ? "var(--success)" : "var(--text-muted)", background: app.activa ? "var(--success-bg)" : "var(--text-muted)15" }}>
                     {app.activa ? "Activa" : "Inactiva"}
                   </span>
                   {esAdmin && (
-                    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 12, fontSize: 10, fontWeight: 600, color: "#FF3B30", background: "#FF3B3015" }}>
+                    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 12, fontSize: 10, fontWeight: 600, color: "var(--danger)", background: "var(--danger-bg)" }}>
                       Sistema
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 12, color: "#8E8E93", marginTop: 3 }}>{app.descripcion}</div>
-                <div style={{ fontSize: 11, color: "#8E8E93", marginTop: 6, display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>{app.descripcion}</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, display: "flex", gap: 12, flexWrap: "wrap" }}>
                   <span><strong>{numUsuarios}</strong> usuario(s) con acceso</span>
-                  <span>Código: <code style={{ background: "#F2F2F7", padding: "1px 6px", borderRadius: 4, fontFamily: "monospace" }}>{app.codigo}</code></span>
+                  <span>Código: <code style={{ background: "var(--bg-hover)", padding: "1px 6px", borderRadius: 4, fontFamily: "monospace" }}>{app.codigo}</code></span>
                   <span>Orden: <strong>{app.orden}</strong></span>
                 </div>
               </div>
@@ -179,13 +179,13 @@ export function AdminApps({ cu, isMobile }) {
                       disabled={idx === 0 || actualizando === app.codigo}
                       onClick={() => cambiarOrden(app, "up")}
                       title="Subir"
-                      style={{ width: 32, height: 32, borderRadius: 8, background: "#F2F2F7", border: "none", cursor: idx === 0 ? "default" : "pointer", fontSize: 12, opacity: idx === 0 ? 0.3 : 1 }}
+                      style={{ width: 32, height: 32, borderRadius: 8, background: "var(--bg-hover)", border: "none", cursor: idx === 0 ? "default" : "pointer", fontSize: 12, opacity: idx === 0 ? 0.3 : 1 }}
                     >↑</button>
                     <button
                       disabled={idx >= apps.length - 2 || actualizando === app.codigo}
                       onClick={() => cambiarOrden(app, "down")}
                       title="Bajar"
-                      style={{ width: 32, height: 32, borderRadius: 8, background: "#F2F2F7", border: "none", cursor: idx >= apps.length - 2 ? "default" : "pointer", fontSize: 12, opacity: idx >= apps.length - 2 ? 0.3 : 1 }}
+                      style={{ width: 32, height: 32, borderRadius: 8, background: "var(--bg-hover)", border: "none", cursor: idx >= apps.length - 2 ? "default" : "pointer", fontSize: 12, opacity: idx >= apps.length - 2 ? 0.3 : 1 }}
                     >↓</button>
                   </>
                 )}
@@ -196,8 +196,8 @@ export function AdminApps({ cu, isMobile }) {
                   style={{
                     padding: "6px 14px",
                     borderRadius: 8,
-                    background: esAdmin ? "#F2F2F7" : (app.activa ? "#FF3B3015" : "#34C75915"),
-                    color: esAdmin ? "#C7C7CC" : (app.activa ? "#FF3B30" : "#34C759"),
+                    background: esAdmin ? "var(--bg-hover)" : (app.activa ? "var(--danger-bg)" : "var(--success-bg)"),
+                    color: esAdmin ? "var(--border-3)" : (app.activa ? "var(--danger)" : "var(--success)"),
                     border: "none",
                     fontSize: 12,
                     fontWeight: 600,

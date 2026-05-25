@@ -7,16 +7,16 @@ import { AdminRoles } from './AdminRoles'
 import { AdminPermisos } from './AdminPermisos'
 
 const ROLES = [
-  { k: "admin",            l: "Admin",            c: "#FF3B30" },
-  { k: "dir_general",      l: "Dir. General",     c: "#FF3B30" },
-  { k: "dir_finanzas",     l: "Dir. Finanzas",    c: "#AF52DE" },
-  { k: "dir_negocios",     l: "Dir. Negocios",    c: "#007AFF" },
-  { k: "dir_operaciones",  l: "Dir. Operaciones", c: "#5AC8FA" },
-  { k: "analista",         l: "Analista",         c: "#34C759" },
-  { k: "jefe_bodega",      l: "Jefe Bodega",      c: "#FF9500" },
-  { k: "jefe_operaciones", l: "Jefe Operaciones", c: "#FF9500" },
-  { k: "directorio",       l: "Directorio",       c: "#8E8E93" },
-  { k: "cajero",           l: "Cajero/Vendedor",  c: "#34C759" }
+  { k: "admin",            l: "Admin",            c: "var(--danger)" },
+  { k: "dir_general",      l: "Dir. General",     c: "var(--danger)" },
+  { k: "dir_finanzas",     l: "Dir. Finanzas",    c: "var(--purple)" },
+  { k: "dir_negocios",     l: "Dir. Negocios",    c: "var(--accent)" },
+  { k: "dir_operaciones",  l: "Dir. Operaciones", c: "var(--info)" },
+  { k: "analista",         l: "Analista",         c: "var(--success)" },
+  { k: "jefe_bodega",      l: "Jefe Bodega",      c: "var(--warning)" },
+  { k: "jefe_operaciones", l: "Jefe Operaciones", c: "var(--warning)" },
+  { k: "directorio",       l: "Directorio",       c: "var(--text-muted)" },
+  { k: "cajero",           l: "Cajero/Vendedor",  c: "var(--success)" }
 ]
 const rl = u => ROLES.find(r => r.k === u?.rol) || ROLES[5]
 
@@ -95,10 +95,10 @@ export function AdminApp({ cu, setAppActual }) {
   // Loading mientras verifica acceso
   if (verificandoAcceso) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F2F2F7", fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif" }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-hover)", fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif" }}>
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🔑</div>
-          <div style={{ fontSize: 14, color: "#8E8E93" }}>Verificando acceso...</div>
+          <div style={{ fontSize: 14, color: "var(--text-muted)" }}>Verificando acceso...</div>
         </div>
       </div>
     )
@@ -107,14 +107,14 @@ export function AdminApp({ cu, setAppActual }) {
   // Bloqueo: no tiene acceso
   if (!tieneAcceso) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F2F2F7", fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif", padding: 20 }}>
-        <div style={{ textAlign: "center", maxWidth: 420, background: "#fff", padding: 40, borderRadius: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-hover)", fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif", padding: 20 }}>
+        <div style={{ textAlign: "center", maxWidth: 420, background: "var(--bg-surface)", padding: 40, borderRadius: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>🚫</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#1C1C1E", marginBottom: 8 }}>Acceso denegado</div>
-          <div style={{ fontSize: 14, color: "#8E8E93", marginBottom: 24, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>Acceso denegado</div>
+          <div style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 24, lineHeight: 1.5 }}>
             No tienes permiso para acceder al módulo de Administración. Solo administradores autorizados pueden ingresar aquí.
           </div>
-          <button onClick={cambiarApp} style={{ padding: "10px 20px", borderRadius: 12, background: "#007AFF", color: "#fff", border: "none", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+          <button onClick={cambiarApp} style={{ padding: "10px 20px", borderRadius: 12, background: "var(--accent)", color: "var(--bg-surface)", border: "none", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
             ← Volver al inicio
           </button>
         </div>
@@ -127,20 +127,20 @@ export function AdminApp({ cu, setAppActual }) {
       fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif",
       margin: 0,
       padding: isMobile ? "0 10px 90px" : "0 20px 100px",
-      background: "#F2F2F7",
+      background: "var(--bg-hover)",
       minHeight: "100vh",
       fontSize: 14
     }}>
       <style>{`
         @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
         *{box-sizing:border-box;margin:0;padding:0}
-        body{background:#F2F2F7;overflow-x:hidden}
-        input:focus,select:focus,textarea:focus{border-color:#1C1C1E!important;box-shadow:0 0 0 3px rgba(28,28,30,0.1)}
-        ::selection{background:#1C1C1E;color:#fff}
+        body{background:var(--bg-hover);overflow-x:hidden}
+        input:focus,select:focus,textarea:focus{border-color:var(--text-primary)!important;box-shadow:0 0 0 3px rgba(28,28,30,0.1)}
+        ::selection{background:var(--text-primary);color:var(--bg-surface)}
         ::-webkit-scrollbar{width:10px;height:10px}
-        ::-webkit-scrollbar-track{background:#F2F2F7;border-radius:5px}
-        ::-webkit-scrollbar-thumb{background:#C7C7CC;border-radius:5px;border:2px solid #F2F2F7}
-        ::-webkit-scrollbar-thumb:hover{background:#8E8E93}
+        ::-webkit-scrollbar-track{background:var(--bg-hover);border-radius:5px}
+        ::-webkit-scrollbar-thumb{background:var(--border-3);border-radius:5px;border:2px solid var(--bg-hover)}
+        ::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
         table{font-size:13px}
         th,td{white-space:nowrap}
       `}</style>
@@ -150,30 +150,30 @@ export function AdminApp({ cu, setAppActual }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 38, height: 38, borderRadius: 10, background: "#1C1C1E", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🔑</div>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: "var(--text-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🔑</div>
               <div>
-                <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 800, color: "#1C1C1E", letterSpacing: "-0.02em" }}>Administración</div>
-                <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>Gestión de usuarios y accesos ERP</div>
+                <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>Administración</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Gestión de usuarios y accesos ERP</div>
               </div>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {!isMobile && <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, background: "#fff", border: "1px solid #E5E5EA" }}>
+            {!isMobile && <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, background: "var(--bg-surface)", border: "1px solid var(--border-2)" }}>
               <div style={{ width: 8, height: 8, borderRadius: 4, background: r.c }} />
               <span style={{ fontSize: 12, fontWeight: 600 }}>{cu?.nombre}</span>
-              <span style={{ fontSize: 11, color: "#8E8E93" }}>· {r.l}</span>
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>· {r.l}</span>
             </div>}
-            <button onClick={cambiarApp} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, padding: isMobile ? "6px 8px" : "6px 10px", borderRadius: 10, background: "#AF52DE15", border: "none", cursor: "pointer", color: "#AF52DE", minWidth: isMobile ? 42 : 56 }} title="Cambiar de aplicación">
+            <button onClick={cambiarApp} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, padding: isMobile ? "6px 8px" : "6px 10px", borderRadius: 10, background: "var(--purple-bg)", border: "none", cursor: "pointer", color: "var(--purple)", minWidth: isMobile ? 42 : 56 }} title="Cambiar de aplicación">
               <span style={{ fontSize: isMobile ? 13 : 14, lineHeight: 1 }}>⊞</span>
               <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.02em" }}>Apps</span>
             </button>
-            <button onClick={cerrarSesion} style={{ width: isMobile ? 34 : 36, height: isMobile ? 34 : 36, borderRadius: 10, background: "#FF3B3015", border: "none", cursor: "pointer", fontSize: 13, color: "#FF3B30" }} title="Cerrar sesión">⏻</button>
+            <button onClick={cerrarSesion} style={{ width: isMobile ? 34 : 36, height: isMobile ? 34 : 36, borderRadius: 10, background: "var(--danger-bg)", border: "none", cursor: "pointer", fontSize: 13, color: "var(--danger)" }} title="Cerrar sesión">⏻</button>
           </div>
         </div>
       </div>
 
       {/* TABS */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 14, background: "#E5E5EA", borderRadius: 10, padding: 3, overflowX: "auto" }}>
+      <div style={{ display: "flex", gap: 4, marginBottom: 14, background: "var(--border-2)", borderRadius: 10, padding: 3, overflowX: "auto" }}>
         {ADMIN_TABS.map(t => (
           <button key={t.k} onClick={() => setTab(t.k)} style={{
             flex: isMobile ? "0 0 auto" : 1,
@@ -183,8 +183,8 @@ export function AdminApp({ cu, setAppActual }) {
             fontWeight: 600,
             border: "none",
             cursor: "pointer",
-            background: tab === t.k ? "#fff" : "transparent",
-            color: tab === t.k ? "#1C1C1E" : "#8E8E93",
+            background: tab === t.k ? "var(--bg-surface)" : "transparent",
+            color: tab === t.k ? "var(--text-primary)" : "var(--text-muted)",
             boxShadow: tab === t.k ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
             whiteSpace: "nowrap",
             display: "flex",
