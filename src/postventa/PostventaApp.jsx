@@ -2518,6 +2518,14 @@ const DetalleCaso = ({caso, cu, codigos, onClose, onRefresh}) => {
         nombre_titular: nuevoTipo === 'nc_abono' ? null : (datosBancarios?.nombre_titular || form3Data.nombre_titular),
       }
       await supabase.from('caso_form3_resolucion').update(update).eq('caso_id', casoActual.id)
+
+      // Actualizar estado del caso según el nuevo tipo
+      const nuevoEstadoCaso = nuevoTipo === 'nc_abono' ? 'en_resolucion' : 'transfer_pendiente'
+      if (nuevoEstadoCaso !== casoActual.estado) {
+        await supabase.from('casos_postventa').update({ estado: nuevoEstadoCaso }).eq('id', casoActual.id)
+        setCasoActual(p => ({ ...p, estado: nuevoEstadoCaso }))
+      }
+
       await supabase.from('caso_eventos').insert({
         id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
         caso_id: casoActual.id,
