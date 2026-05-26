@@ -2520,10 +2520,34 @@ const DetalleCaso = ({caso, cu, codigos, onClose, onRefresh}) => {
       await supabase.from('caso_form3_resolucion').update(update).eq('caso_id', casoActual.id)
 
       // Actualizar estado del caso según el nuevo tipo
-      const nuevoEstadoCaso = nuevoTipo === 'nc_abono' ? 'en_resolucion' : 'transfer_pendiente'
+      // nc_abono: cerrar directamente (la NC ya fue emitida en FORM 3)
+      // nc_transfer: volver a transfer_pendiente
+      let nuevoEstadoCaso
+      let extraUpdate = {}
+      if (nuevoTipo === 'nc_abono') {
+        nuevoEstadoCaso = 'cerrado'
+        extraUpdate = {
+          cerrado_at: new Date().toISOString(),
+          sla_resolucion_horas: Math.round((Date.now() - new Date(casoActual.created_at).getTime()) / 3600000),
+          sla_cumplido: false
+        }
+        // Crear form4_cierre para dejar registro completo
+        await supabase.from('caso_form4_cierre').insert({
+          id: 'f4' + Date.now().toString(36),
+          caso_id: casoActual.id,
+          cliente_conforme: true,
+          metodo_confirmacion: 'abono_cuenta_cliente',
+          cerrado_por_id: cu.id,
+          cerrado_por_nombre: cu.nombre,
+          fecha_cierre: new Date().toISOString(),
+          observaciones_finales: 'Caso cerrado al cambiar método de pago de transferencia a abono cuenta cliente'
+        })
+      } else {
+        nuevoEstadoCaso = 'transfer_pendiente'
+      }
       if (nuevoEstadoCaso !== casoActual.estado) {
-        await supabase.from('casos_postventa').update({ estado: nuevoEstadoCaso }).eq('id', casoActual.id)
-        setCasoActual(p => ({ ...p, estado: nuevoEstadoCaso }))
+        await supabase.from('casos_postventa').update({ estado: nuevoEstadoCaso, ...extraUpdate }).eq('id', casoActual.id)
+        setCasoActual(p => ({ ...p, estado: nuevoEstadoCaso, ...extraUpdate }))
       }
 
       await supabase.from('caso_eventos').insert({
@@ -2834,8 +2858,56 @@ const DetalleCaso = ({caso, cu, codigos, onClose, onRefresh}) => {
       {(() => {
         // Aplica si: el form3 actual es nc_transfer (directo o via escalamiento aprobado)
         const esTransfer = form3Data?.tipo_resolucion === 'nc_transfer'
+        const esAbono = form3Data?.tipo_resolucion === 'nc_abono' || form3Data?.tipo_resolucion === 'nc_abono_cliente'
         // transfer_ejecutada no existe en schema actual — se infiere del estado
         const yaEjecutada = casoActual.estado === "cerrado" && form4Data != null
+
+        // NC Abono en resolución — mostrar botón de cierre directo
+        if (esAbono && casoActual.estado === 'en_resolucion' && h('cerrar_caso')) {
+          return (
+            <div style={{marginBottom:14}}>
+              <div style={css.divider}/>
+              <div style={{borderRadius:14, padding:'14px 16px', background:'#AF52DE10', border:'1.5px solid #AF52DE40'}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                  <div>
+                    <div style={{fontWeight:700, fontSize:14, color:'#AF52DE'}}>💳 NC con abono a cuenta cliente</div>
+                    <div style={{fontSize:12, color:'#8E8E93', marginTop:3}}>
+                      NC N°{form3Data.bsale_doc_numero} · {fmt(form3Data.monto)} · La NC ya fue emitida
+                    </div>
+                  </div>
+                  <Bt variant='primary' sm onClick={async () => {
+                    if (!window.confirm('¿Confirmar cierre del caso? La NC de abono ya fue emitida.')) return
+                    try {
+                      await supabase.from('caso_form4_cierre').upsert({
+                        id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+                        caso_id: casoActual.id,
+                        cerrado_por: cu.id,
+                        cerrado_por_nombre: cu.nombre,
+                        cliente_conforme: true,
+                        fecha_cierre: new Date().toISOString().split('T')[0],
+                        observaciones_finales: 'NC abono emitida. Caso cerrado.'
+                      })
+                      await supabase.from('casos_postventa').update({ estado: 'cerrado' }).eq('id', casoActual.id)
+                      await supabase.from('caso_eventos').insert({
+                        id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+                        caso_id: casoActual.id,
+                        usuario_id: cu.id,
+                        usuario_nombre: cu.nombre,
+                        usuario_rol: cu.rol,
+                        evento: 'caso_cerrado',
+                        detalle: 'Caso cerrado con NC abono a cuenta cliente'
+                      })
+                      recargarCaso()
+                    } catch(e) { console.error(e) }
+                  }}>
+                    ✅ Confirmar cierre
+                  </Bt>
+                </div>
+              </div>
+            </div>
+          )
+        }
+
         if (!esTransfer) return null
         if (!['cerrado','transfer_pendiente','en_resolucion'].includes(casoActual.estado)) return null
         return (
