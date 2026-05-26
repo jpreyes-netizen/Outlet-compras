@@ -2854,11 +2854,19 @@ const DetalleCaso = ({caso, cu, codigos, onClose, onRefresh}) => {
                       NC N°{form3Data.bsale_doc_numero} · {fmt(form3Data.monto)} · {form3Data.nombre_titular}
                     </div>
                   </div>
-                  {['caja','admin','gerencia'].includes(cu.rol) && (
-                    <Bt variant="success" sm onClick={() => setShowForm4T(true)}>
-                      Confirmar transferencia
-                    </Bt>
-                  )}
+                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                    {['admin','jefe_tienda','gerencia'].includes(cu.rol) && (
+                      <button onClick={() => { setShowCambioTipo(true); setCambioTipoDatos({ banco:'', tipo_cuenta:'Cuenta Corriente', num_cuenta:'', nombre_titular:'' }) }} style={{
+                        padding:'6px 12px', borderRadius:8, border:'1px solid var(--warning)',
+                        background:'var(--warning-bg)', color:'var(--warning)', fontSize:12, fontWeight:600, cursor:'pointer'
+                      }}>🔄 Cambiar método</button>
+                    )}
+                    {['caja','admin','gerencia'].includes(cu.rol) && (
+                      <Bt variant="success" sm onClick={() => setShowForm4T(true)}>
+                        Confirmar transferencia
+                      </Bt>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
