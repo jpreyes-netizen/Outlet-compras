@@ -3512,7 +3512,7 @@ const DetalleCaso = ({caso, cu, codigos, onClose, onRefresh}) => {
 
     {/* MODAL CAMBIO TIPO RESOLUCIÓN */}
     {showCambioTipo && form3Data && casoActual && (
-      <div onClick={() => setShowCambioTipo(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:300,padding:20}}>
+      <div onClick={() => setShowCambioTipo(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,padding:20}}>
         <div onClick={e => e.stopPropagation()} style={{background:'#fff',borderRadius:20,padding:28,width:'100%',maxWidth:460}}>
           <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>🔄 Cambiar método de pago</div>
           <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:12}}>
