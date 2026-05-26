@@ -2519,11 +2519,13 @@ const DetalleCaso = ({caso, cu, codigos, onClose, onRefresh}) => {
       }
       await supabase.from('caso_form3_resolucion').update(update).eq('caso_id', casoActual.id)
       await supabase.from('caso_eventos').insert({
+        id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
         caso_id: casoActual.id,
         usuario_id: cu.id,
         usuario_nombre: cu.nombre,
         usuario_rol: cu.rol,
         evento: 'cambio_tipo_resolucion',
+        detalle: 'Cambio de ' + tipoAnterior + ' a ' + nuevoTipo,
         payload: {
           tipo_anterior: tipoAnterior,
           tipo_nuevo: nuevoTipo,
