@@ -93,10 +93,132 @@ export async function fetchVinculados(movimientoId) {
   })
 }
 
+// ============ Match scoring (Capa 1) ============
+// Normaliza texto para comparación: minúsculas, sin tildes, sin puntuación, sin espacios extra
+function normalizar(s) {
+  if (!s) return ''
+  return String(s).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ').trim()
+}
+
+// Similitud entre 2 strings basada en tokens compartidos (Jaccard simplificado)
+// 0 = nada en común, 1 = idéntico. Ignora tokens muy cortos (<3 chars) tipo "ltda", "spa"
+function similitudTexto(a, b) {
+  const STOPWORDS = new Set(['ltda', 'spa', 'sa', 'eirl', 'de', 'la', 'el', 'y', 'del', 'los', 'las'])
+  const ta = new Set(normalizar(a).split(' ').filter(w => w.length >= 3 && !STOPWORDS.has(w)))
+  const tb = new Set(normalizar(b).split(' ').filter(w => w.length >= 3 && !STOPWORDS.has(w)))
+  if (ta.size === 0 || tb.size === 0) return 0
+  let comunes = 0
+  for (const w of ta) if (tb.has(w)) comunes++
+  return comunes / Math.min(ta.size, tb.size)
+}
+
+// Días entre 2 fechas (string YYYY-MM-DD)
+function diasEntre(fecha1, fecha2) {
+  if (!fecha1 || !fecha2) return 9999
+  const d1 = new Date(fecha1)
+  const d2 = new Date(fecha2)
+  return Math.abs(Math.round((d1 - d2) / (1000 * 60 * 60 * 24)))
+}
+
+/**
+ * Calcula score 0-100 de match entre movimiento bancario y factura candidata.
+ * Pesos: RUT 30, Monto 40, Fecha 15, Razón social 10, Historial 5
+ * Devuelve { score, level, reasons } donde level es 'perfecto'|'probable'|'revisar'|'descartado'
+ */
+export function calcularMatchScore({ movimiento, factura }) {
+  const reasons = []
+  let score = 0
+
+  const rutMov = extraerRut(movimiento.descripcion)
+  const saldoMov = Number(movimiento.saldo_pendiente) || 0
+
+  // 1) RUT (peso 30)
+  if (rutMov && factura.rut_proveedor) {
+    if (rutMov === factura.rut_proveedor.toUpperCase().replace(/\./g, '')) {
+      score += 30
+      reasons.push({ ok: true, txt: 'RUT exacto' })
+    } else {
+      reasons.push({ ok: false, txt: 'RUT distinto' })
+    }
+  } else if (rutMov && !factura.rut_proveedor) {
+    reasons.push({ ok: false, txt: 'Factura sin RUT' })
+  } else if (!rutMov && factura.rut_proveedor) {
+    reasons.push({ ok: null, txt: 'Mov. sin RUT detectable' })
+  }
+
+  // 2) Monto (peso 40) — compara saldo_pendiente movimiento vs saldo factura
+  const saldoFact = Number(factura.saldo) || Number(factura.monto_total) || 0
+  if (saldoFact > 0 && saldoMov > 0) {
+    const diff = Math.abs(saldoFact - saldoMov)
+    const pct = diff / saldoMov
+    if (pct < 0.001) {
+      score += 40
+      reasons.push({ ok: true, txt: 'Monto exacto' })
+    } else if (pct <= 0.01) {
+      score += 35
+      reasons.push({ ok: true, txt: `Monto ±${(pct * 100).toFixed(1)}%` })
+    } else if (pct <= 0.05) {
+      score += 25
+      reasons.push({ ok: true, txt: `Monto ±${(pct * 100).toFixed(1)}%` })
+    } else if (pct <= 0.15) {
+      score += 10
+      reasons.push({ ok: null, txt: `Monto difiere ${(pct * 100).toFixed(0)}%` })
+    } else {
+      reasons.push({ ok: false, txt: `Monto difiere ${(pct * 100).toFixed(0)}%` })
+    }
+  }
+
+  // 3) Fecha (peso 15) — proximidad fecha factura vs fecha movimiento
+  const dias = diasEntre(movimiento.fecha, factura.fecha_emision)
+  if (dias <= 7) {
+    score += 15
+    reasons.push({ ok: true, txt: `${dias}d entre fechas` })
+  } else if (dias <= 30) {
+    score += 10
+    reasons.push({ ok: true, txt: `${dias}d entre fechas` })
+  } else if (dias <= 60) {
+    score += 5
+    reasons.push({ ok: null, txt: `${dias}d entre fechas` })
+  } else if (dias < 9999) {
+    reasons.push({ ok: false, txt: `${dias}d entre fechas` })
+  }
+
+  // 4) Razón social en descripción (peso 10)
+  if (factura.razon_social && movimiento.descripcion) {
+    const sim = similitudTexto(factura.razon_social, movimiento.descripcion)
+    if (sim >= 0.7) {
+      score += 10
+      reasons.push({ ok: true, txt: 'Razón social coincide' })
+    } else if (sim >= 0.3) {
+      score += 5
+      reasons.push({ ok: true, txt: 'Razón social parcial' })
+    }
+  }
+
+  // 5) Penalizar factura ya pagada
+  if (factura.estado_factura === 'pagada') {
+    score = Math.max(0, score - 30)
+    reasons.push({ ok: false, txt: 'Factura ya pagada' })
+  }
+
+  // Nivel de match
+  let level
+  if (score >= 95) level = 'perfecto'
+  else if (score >= 70) level = 'probable'
+  else if (score >= 40) level = 'revisar'
+  else level = 'descartado'
+
+  return { score, level, reasons }
+}
+
 // ============ Facturas candidatas ============
-export async function fetchFacturasCandidatas({ texto, saldoObjetivo, rutHint }) {
-  const min = Math.round(saldoObjetivo * 0.7)
-  const max = Math.round(saldoObjetivo * 1.3)
+export async function fetchFacturasCandidatas({ texto, saldoObjetivo, rutHint, movimiento }) {
+  // Ampliamos rango: 50%-200% del saldo (el score filtra después)
+  const min = Math.round(saldoObjetivo * 0.5)
+  const max = Math.round(saldoObjetivo * 2.0)
 
   let q = supabase.from('libro_compras').select('id, fecha_emision, folio, rut_proveedor, razon_social, monto_total').order('fecha_emision', { ascending: false }).limit(200)
 
@@ -118,10 +240,20 @@ export async function fetchFacturasCandidatas({ texto, saldoObjetivo, rutHint })
   const enriched = facturas.map(x => {
     const e = estadoMap.get(x.id)
     const total = Number(x.monto_total) || 0
-    return { ...x, monto_total: total, total_pagado: e?.total_pagado ?? 0, saldo: e?.saldo ?? total, estado_factura: e?.estado_factura ?? 'sin_pagar' }
+    const f = { ...x, monto_total: total, total_pagado: e?.total_pagado ?? 0, saldo: e?.saldo ?? total, estado_factura: e?.estado_factura ?? 'sin_pagar' }
+    // Calcular score si tenemos el movimiento de contexto
+    if (movimiento) {
+      const { score, level, reasons } = calcularMatchScore({ movimiento, factura: f })
+      f.match_score = score
+      f.match_level = level
+      f.match_reasons = reasons
+    }
+    return f
   })
 
+  // Orden: 1) score desc si existe, 2) no pagadas primero, 3) cercanía de monto
   enriched.sort((a, b) => {
+    if (a.match_score != null && b.match_score != null) return b.match_score - a.match_score
     const oa = a.estado_factura === 'pagada' ? 2 : 0
     const ob = b.estado_factura === 'pagada' ? 2 : 0
     if (oa !== ob) return oa - ob
@@ -145,7 +277,7 @@ export async function crearImportacion(payload) {
 }
 
 // ============ Vincular / Desvincular ============
-export async function vincularRespaldo({ movimientoId, tipoRespaldo, facturaId, carpetaId, monto, observaciones, subtipoOtro }) {
+export async function vincularRespaldo({ movimientoId, tipoRespaldo, facturaId, carpetaId, monto, observaciones, subtipoOtro, movimiento, proveedorNombre }) {
   const { data: sess } = await supabase.auth.getSession()
   const userId = sess.session?.user?.id ?? null
   const obs = tipoRespaldo === 'otro' && subtipoOtro ? `[${subtipoOtro}] ${observaciones ?? ''}`.trim() : observaciones ?? null
@@ -153,6 +285,10 @@ export async function vincularRespaldo({ movimientoId, tipoRespaldo, facturaId, 
   const { error } = await supabase.from('conciliaciones').insert(row)
   if (error) throw error
   await refrescarEstadoMovimiento(movimientoId)
+  // Guardar aprendizaje en background (no bloquea ni rompe si falla)
+  if (movimiento) {
+    guardarAprendizaje({ movimiento, tipoRespaldo, facturaId, carpetaId, proveedorNombre }).catch(() => {})
+  }
 }
 
 export async function desvincular(conciliacionId, movimientoId) {
@@ -181,4 +317,93 @@ export function extraerRut(desc) {
   const m2 = desc.match(RUT_REGEX_PLAIN)
   if (m2) return m2[1].toUpperCase()
   return null
+}
+
+// ============ Capa 2: Memoria de conciliación ============
+
+// Limpia la descripción para extraer patrón reutilizable:
+// elimina RUTs, números largos (montos, folios, referencias), fechas, deja solo palabras clave
+export function extraerPatron(descripcion) {
+  if (!descripcion) return ''
+  return descripcion
+    .replace(/\d{1,2}\.\d{3}\.\d{3}-[\dkK]/gi, '')   // RUT con puntos
+    .replace(/\d{7,8}-[\dkK]/gi, '')                   // RUT sin puntos
+    .replace(/\b\d{6,}\b/g, '')                        // números largos (montos, refs)
+    .replace(/\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/g, '') // fechas
+    .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ ]/g, ' ')         // solo letras
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase()
+    .slice(0, 120)                                      // máx 120 chars
+}
+
+// Busca sugerencia aprendida para un movimiento dado
+// Devuelve el registro con más aciertos que coincida por RUT o patrón de descripción
+export async function buscarAprendizaje(movimiento) {
+  const rut = extraerRut(movimiento.descripcion)
+  const patron = extraerPatron(movimiento.descripcion)
+  if (!rut && !patron) return null
+
+  // Buscar por RUT primero (más confiable), luego por patrón
+  let candidatos = []
+  if (rut) {
+    const { data } = await supabase.from('conciliacion_aprendizaje')
+      .select('*').eq('rut_proveedor', rut)
+      .order('aciertos', { ascending: false }).limit(5)
+    candidatos = data ?? []
+  }
+
+  // Si no hay por RUT, buscar por patrón (coincidencia parcial)
+  if (candidatos.length === 0 && patron.length >= 6) {
+    const palabrasClave = patron.split(' ').filter(p => p.length >= 4).slice(0, 3)
+    for (const pal of palabrasClave) {
+      const { data } = await supabase.from('conciliacion_aprendizaje')
+        .select('*').ilike('patron', `%${pal}%`)
+        .order('aciertos', { ascending: false }).limit(5)
+      if (data?.length) { candidatos = data; break }
+    }
+  }
+
+  if (candidatos.length === 0) return null
+  // Devolver el de más aciertos
+  return candidatos[0]
+}
+
+// Guarda o actualiza un aprendizaje al conciliar manualmente
+export async function guardarAprendizaje({ movimiento, tipoRespaldo, facturaId, carpetaId, proveedorNombre }) {
+  const { data: sess } = await supabase.auth.getSession()
+  const userId = sess.session?.user?.id ?? null
+  const rut = extraerRut(movimiento.descripcion)
+  const patron = extraerPatron(movimiento.descripcion)
+  if (!patron) return  // descripción sin patrón útil, no guardar
+
+  // Buscar si ya existe un registro con ese patrón+tipo
+  const { data: existing } = await supabase.from('conciliacion_aprendizaje')
+    .select('id, aciertos')
+    .eq('patron', patron)
+    .eq('tipo_respaldo', tipoRespaldo)
+    .maybeSingle()
+
+  if (existing) {
+    // Actualizar aciertos + datos del ejemplo más reciente
+    await supabase.from('conciliacion_aprendizaje').update({
+      aciertos: existing.aciertos + 1,
+      ultima_vez: new Date().toISOString(),
+      factura_id_ej: facturaId ?? null,
+      carpeta_id_ej: carpetaId ?? null,
+      proveedor_nombre: proveedorNombre ?? null,
+      rut_proveedor: rut ?? null,
+    }).eq('id', existing.id)
+  } else {
+    await supabase.from('conciliacion_aprendizaje').insert({
+      patron,
+      rut_proveedor: rut ?? null,
+      tipo_respaldo: tipoRespaldo,
+      factura_id_ej: facturaId ?? null,
+      carpeta_id_ej: carpetaId ?? null,
+      proveedor_nombre: proveedorNombre ?? null,
+      aciertos: 1,
+      created_by: userId,
+    })
+  }
 }

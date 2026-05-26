@@ -105,7 +105,7 @@ function parsearCartola(buffer) {
 }
 
 // ── Importador ─────────────────────────────────────────────────────────────
-function ImportadorCartola({ onImportado }) {
+export function ImportadorCartola({ onImportado }) {
   const fileRef = useRef()
   const [dragOver, setDragOver]   = useState(false)
   const [loading, setLoading]     = useState(false)

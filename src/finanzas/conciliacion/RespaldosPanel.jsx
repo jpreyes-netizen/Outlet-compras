@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, Plus, Trash2, FileText, Ship, FileQuestion, Search } from 'lucide-react'
-import { fetchVinculados, fetchFacturasCandidatas, fetchImportacionesAbiertas, vincularRespaldo, desvincular, crearImportacion, extraerRut } from './api_conciliar'
+import { Loader2, Plus, Trash2, FileText, Ship, FileQuestion, Search, Sparkles } from 'lucide-react'
+import { fetchVinculados, fetchFacturasCandidatas, fetchImportacionesAbiertas, vincularRespaldo, desvincular, crearImportacion, extraerRut, buscarAprendizaje } from './api_conciliar'
 import { VincularFacturaModal, VincularImportacionModal, VincularOtroModal, NuevaImportacionModal } from './Modales'
 
 const fmtCLP = n => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n)
@@ -77,6 +77,29 @@ function VinculadosSection({ movimientoId, onChanged }) {
   )
 }
 
+// ── Badge de match score (Capa 1: scoring multicriterio) ───────────────────
+const MATCH_STYLES = {
+  perfecto:   { bg: '#DCFCE7', color: '#166534', label: 'Match perfecto',  icon: '🟢' },
+  probable:   { bg: '#FEF9C3', color: '#854D0E', label: 'Match probable',  icon: '🟡' },
+  revisar:    { bg: '#FFEDD5', color: '#9A3412', label: 'Revisar',         icon: '🟠' },
+  descartado: { bg: '#F1F5F9', color: '#64748B', label: 'Baja coincidencia', icon: '⚪' },
+}
+
+function MatchBadge({ score, level, reasons }) {
+  if (score == null) return <span style={{ color: '#CBD5E1', fontSize: 10 }}>—</span>
+  const st = MATCH_STYLES[level] ?? MATCH_STYLES.descartado
+  const tooltip = (reasons ?? []).map(r => {
+    const mark = r.ok === true ? '✓' : r.ok === false ? '✗' : '⚠'
+    return `${mark} ${r.txt}`
+  }).join('\n')
+  return (
+    <div title={tooltip} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 99, background: st.bg, color: st.color, fontSize: 10, fontWeight: 700, cursor: 'help' }}>
+      <Sparkles size={10} />
+      <span style={{ fontFamily: 'monospace' }}>{score}%</span>
+    </div>
+  )
+}
+
 function FacturasTab({ movimiento, onChanged }) {
   const [texto, setTexto] = useState('')
   const [data, setData] = useState([])
@@ -86,7 +109,7 @@ function FacturasTab({ movimiento, onChanged }) {
 
   useEffect(() => {
     setLoading(true)
-    fetchFacturasCandidatas({ texto, saldoObjetivo: movimiento.saldo_pendiente, rutHint })
+    fetchFacturasCandidatas({ texto, saldoObjetivo: movimiento.saldo_pendiente, rutHint, movimiento })
       .then(setData).catch(() => setData([])).finally(() => setLoading(false))
   }, [movimiento.movimiento_id, texto, movimiento.saldo_pendiente])
 
@@ -104,16 +127,22 @@ function FacturasTab({ movimiento, onChanged }) {
         <div style={{ border: '1px solid #E2E8F0', borderRadius: 8, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead><tr>
+              <th style={{ ...TH, width: 70 }}>Match</th>
               <th style={TH}>Fecha</th><th style={TH}>Folio</th><th style={TH}>RUT</th>
               <th style={TH}>Razón social</th><th style={{ ...TH, textAlign: 'right' }}>Total</th>
               <th style={{ ...TH, textAlign: 'right' }}>Saldo</th>
             </tr></thead>
             <tbody>
-              {data.map(f => (
+              {data.map(f => {
+                const bg = f.match_level === 'perfecto' ? '#F0FDF4'
+                  : f.match_level === 'probable' ? '#FEFCE8'
+                  : 'transparent'
+                return (
                 <tr key={f.id} onClick={() => setSel(f)}
-                  style={{ borderTop: '1px solid #F1F5F9', cursor: 'pointer', opacity: f.estado_factura === 'pagada' ? 0.5 : 1 }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#F0F9FF'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  style={{ borderTop: '1px solid #F1F5F9', cursor: 'pointer', opacity: f.estado_factura === 'pagada' ? 0.5 : 1, background: bg }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#EFF6FF'}
+                  onMouseLeave={e => e.currentTarget.style.background = bg}>
+                  <td style={TD}><MatchBadge score={f.match_score} level={f.match_level} reasons={f.match_reasons} /></td>
                   <td style={TD}>{f.fecha_emision}</td>
                   <td style={{ ...TD, fontFamily: 'monospace' }}>{f.folio ?? '—'}</td>
                   <td style={{ ...TD, fontFamily: 'monospace', color: '#64748B' }}>{f.rut_proveedor ?? '—'}</td>
@@ -121,7 +150,8 @@ function FacturasTab({ movimiento, onChanged }) {
                   <td style={{ ...TD, textAlign: 'right', fontFamily: 'monospace' }}>{fmtCLP(f.monto_total)}</td>
                   <td style={{ ...TD, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#16A34A' }}>{fmtCLP(f.saldo)}</td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -131,7 +161,7 @@ function FacturasTab({ movimiento, onChanged }) {
           onClose={() => setSel(null)}
           onConfirm={async (monto, obs) => {
             try {
-              await vincularRespaldo({ movimientoId: movimiento.movimiento_id, tipoRespaldo: 'factura_compra', facturaId: sel.id, monto, observaciones: obs })
+              await vincularRespaldo({ movimientoId: movimiento.movimiento_id, tipoRespaldo: 'factura_compra', facturaId: sel.id, monto, observaciones: obs, movimiento, proveedorNombre: sel.razon_social ?? null })
               toast.success('Factura vinculada'); setSel(null)
               setData(prev => prev.map(f => f.id === sel.id ? { ...f, total_pagado: f.total_pagado + monto, saldo: f.saldo - monto } : f))
               onChanged()
@@ -193,7 +223,7 @@ function ImportacionesTab({ movimiento, onChanged }) {
           onClose={() => setSel(null)}
           onConfirm={async (monto, obs) => {
             try {
-              await vincularRespaldo({ movimientoId: movimiento.movimiento_id, tipoRespaldo: 'importacion', carpetaId: sel.id, monto, observaciones: obs })
+              await vincularRespaldo({ movimientoId: movimiento.movimiento_id, tipoRespaldo: 'importacion', carpetaId: sel.id, monto, observaciones: obs, movimiento, proveedorNombre: sel.proveedor_exterior ?? null })
               toast.success('Importación vinculada'); setSel(null); onChanged()
             } catch (e) { toast.error('Error: ' + (e instanceof Error ? e.message : '?')) }
           }} />
@@ -233,6 +263,20 @@ function OtrosTab({ movimiento, onChanged }) {
 
 export function RespaldosPanel({ movimiento, onAfterChange }) {
   const [tab, setTab] = useState('facturas')
+  const [aprendizaje, setAprendizaje] = useState(null)
+  const [aprendLoading, setAprendLoading] = useState(false)
+  const [aprendDismissed, setAprendDismissed] = useState(false)
+
+  // Buscar aprendizaje cada vez que cambia el movimiento
+  useEffect(() => {
+    if (!movimiento) { setAprendizaje(null); return }
+    setAprendDismissed(false)
+    setAprendLoading(true)
+    buscarAprendizaje(movimiento)
+      .then(setAprendizaje)
+      .catch(() => setAprendizaje(null))
+      .finally(() => setAprendLoading(false))
+  }, [movimiento?.movimiento_id])
 
   if (!movimiento) {
     return (
@@ -241,6 +285,8 @@ export function RespaldosPanel({ movimiento, onAfterChange }) {
       </div>
     )
   }
+
+  const mostrarBanner = aprendizaje && !aprendDismissed && movimiento.estado_conciliacion === 'sin_conciliar'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, border: '1px solid #E2E8F0', background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', height: '100%' }}>
@@ -258,6 +304,34 @@ export function RespaldosPanel({ movimiento, onAfterChange }) {
             <div style={{ fontSize: 10, color: '#94A3B8' }}>de {fmtCLP(movimiento.monto)}</div>
           </div>
         </div>
+
+        {/* Banner sugerencia aprendida */}
+        {aprendLoading && (
+          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#94A3B8' }}>
+            <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> Buscando sugerencia…
+          </div>
+        )}
+        {mostrarBanner && (
+          <div style={{ marginTop: 10, background: 'linear-gradient(135deg, #F0FDF4, #DCFCE7)', border: '1px solid #86EFAC', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <Sparkles size={16} style={{ color: '#16A34A', flexShrink: 0, marginTop: 1 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#166534', marginBottom: 2 }}>
+                Sugerencia aprendida · {aprendizaje.aciertos} {aprendizaje.aciertos === 1 ? 'vez anterior' : 'veces anteriores'}
+              </div>
+              <div style={{ fontSize: 11, color: '#15803D', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {aprendizaje.proveedor_nombre
+                  ? <>Proveedor: <strong>{aprendizaje.proveedor_nombre}</strong> · {aprendizaje.tipo_respaldo.replace('_', ' ')}</>
+                  : <>Tipo: <strong>{aprendizaje.tipo_respaldo.replace('_', ' ')}</strong></>
+                }
+              </div>
+              <div style={{ fontSize: 10, color: '#4ADE80', marginTop: 2 }}>
+                Patrón: "{aprendizaje.patron.slice(0, 60)}{aprendizaje.patron.length > 60 ? '…' : ''}"
+              </div>
+            </div>
+            <button onClick={() => setAprendDismissed(true)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#86EFAC', fontSize: 16, lineHeight: 1, padding: 2, flexShrink: 0 }}>×</button>
+          </div>
+        )}
       </div>
 
       {/* Vinculados */}

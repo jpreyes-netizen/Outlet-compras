@@ -2396,6 +2396,9 @@ const DetalleCaso = ({caso, cu, codigos, onClose, onRefresh}) => {
 
   const [form2Data,   setForm2Data]   = useState(null)
   const [form3Data,   setForm3Data]   = useState(null)
+  const [showCambioTipo, setShowCambioTipo] = useState(false)
+  const [cambioTipoLoading, setCambioTipoLoading] = useState(false)
+  const [cambioTipoDatos, setCambioTipoDatos] = useState({ banco:'', tipo_cuenta:'Cuenta Corriente', num_cuenta:'', nombre_titular:'' })
   const [form4Data,   setForm4Data]   = useState(null)
   const [eventos,     setEventos]     = useState([])
   const [loadingF2,   setLoadingF2]   = useState(false)
@@ -2500,6 +2503,73 @@ const DetalleCaso = ({caso, cu, codigos, onClose, onRefresh}) => {
   const onForm3Guardado = async () => {
     setShowForm3(false)
     await recargarCaso()
+  }
+
+  const ejecutarCambioTipo = async (nuevoTipo, datosBancarios) => {
+    if (!casoActual || !form3Data) return
+    setCambioTipoLoading(true)
+    try {
+      const tipoAnterior = form3Data.tipo_resolucion
+      const update = {
+        tipo_resolucion: nuevoTipo,
+        banco:          nuevoTipo === 'nc_abono' ? null : (datosBancarios?.banco || form3Data.banco),
+        tipo_cuenta:    nuevoTipo === 'nc_abono' ? null : (datosBancarios?.tipo_cuenta || form3Data.tipo_cuenta),
+        num_cuenta:     nuevoTipo === 'nc_abono' ? null : (datosBancarios?.num_cuenta || form3Data.num_cuenta),
+        nombre_titular: nuevoTipo === 'nc_abono' ? null : (datosBancarios?.nombre_titular || form3Data.nombre_titular),
+      }
+      await supabase.from('caso_form3_resolucion').update(update).eq('caso_id', casoActual.id)
+
+      // Actualizar estado del caso según el nuevo tipo
+      // nc_abono: cerrar directamente (la NC ya fue emitida en FORM 3)
+      // nc_transfer: volver a transfer_pendiente
+      let nuevoEstadoCaso
+      let extraUpdate = {}
+      if (nuevoTipo === 'nc_abono') {
+        nuevoEstadoCaso = 'cerrado'
+        extraUpdate = {
+          cerrado_at: new Date().toISOString(),
+          sla_resolucion_horas: Math.round((Date.now() - new Date(casoActual.created_at).getTime()) / 3600000),
+          sla_cumplido: false
+        }
+        // Crear form4_cierre para dejar registro completo
+        await supabase.from('caso_form4_cierre').insert({
+          id: 'f4' + Date.now().toString(36),
+          caso_id: casoActual.id,
+          cliente_conforme: true,
+          metodo_confirmacion: 'abono_cuenta_cliente',
+          cerrado_por_id: cu.id,
+          cerrado_por_nombre: cu.nombre,
+          fecha_cierre: new Date().toISOString(),
+          observaciones_finales: 'Caso cerrado al cambiar método de pago de transferencia a abono cuenta cliente'
+        })
+      } else {
+        nuevoEstadoCaso = 'transfer_pendiente'
+      }
+      if (nuevoEstadoCaso !== casoActual.estado) {
+        await supabase.from('casos_postventa').update({ estado: nuevoEstadoCaso, ...extraUpdate }).eq('id', casoActual.id)
+        setCasoActual(p => ({ ...p, estado: nuevoEstadoCaso, ...extraUpdate }))
+      }
+
+      await supabase.from('caso_eventos').insert({
+        id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+        caso_id: casoActual.id,
+        usuario_id: cu.id,
+        usuario_nombre: cu.nombre,
+        usuario_rol: cu.rol,
+        evento: 'cambio_tipo_resolucion',
+        detalle: 'Cambio de ' + tipoAnterior + ' a ' + nuevoTipo,
+        payload: {
+          tipo_anterior: tipoAnterior,
+          tipo_nuevo: nuevoTipo,
+          motivo: 'Cambio solicitado por cliente',
+          datos_anteriores: { banco: form3Data.banco, tipo_cuenta: form3Data.tipo_cuenta, num_cuenta: form3Data.num_cuenta, nombre_titular: form3Data.nombre_titular }
+        }
+      })
+      setForm3Data(p => ({ ...p, ...update }))
+      setShowCambioTipo(false)
+      setCambioTipoDatos({ banco:'', tipo_cuenta:'Cuenta Corriente', num_cuenta:'', nombre_titular:'' })
+    } catch(e) { console.error('Error cambiando tipo:', e) }
+    setCambioTipoLoading(false)
   }
 
   return (
@@ -2709,6 +2779,17 @@ const DetalleCaso = ({caso, cu, codigos, onClose, onRefresh}) => {
                   {form3Data.banco} · {form3Data.tipo_cuenta} · {form3Data.num_cuenta} · {form3Data.nombre_titular}
                 </div>
               )}
+              {/* Botón cambio tipo — solo admin/jefe_tienda en casos transfer_pendiente */}
+              {casoActual.estado === 'transfer_pendiente' && ['admin','jefe_tienda','gerencia'].includes(cu.rol) && (
+                <div style={{marginTop:10}}>
+                  <button onClick={() => { setShowCambioTipo(true); setCambioTipoDatos({ banco:'', tipo_cuenta:'Cuenta Corriente', num_cuenta:'', nombre_titular:'' }) }} style={{
+                    padding:'6px 14px', borderRadius:8, border:'1px solid #FF9500',
+                    background:'#FF950012', color:'#FF9500', fontSize:12, fontWeight:600, cursor:'pointer'
+                  }}>
+                    🔄 Cambiar método de pago
+                  </button>
+                </div>
+              )}
               <div style={{fontSize:11, color:"#8E8E93", marginTop:6}}>
                 Registrado por {form3Data.resuelto_por_nombre} ·{" "}
                 {form3Data.fecha_resolucion
@@ -2777,8 +2858,56 @@ const DetalleCaso = ({caso, cu, codigos, onClose, onRefresh}) => {
       {(() => {
         // Aplica si: el form3 actual es nc_transfer (directo o via escalamiento aprobado)
         const esTransfer = form3Data?.tipo_resolucion === 'nc_transfer'
+        const esAbono = form3Data?.tipo_resolucion === 'nc_abono' || form3Data?.tipo_resolucion === 'nc_abono_cliente'
         // transfer_ejecutada no existe en schema actual — se infiere del estado
         const yaEjecutada = casoActual.estado === "cerrado" && form4Data != null
+
+        // NC Abono en resolución — mostrar botón de cierre directo
+        if (esAbono && casoActual.estado === 'en_resolucion' && ['admin','postventa','jefe_tienda','gerencia'].includes(cu.rol)) {
+          return (
+            <div style={{marginBottom:14}}>
+              <div style={css.divider}/>
+              <div style={{borderRadius:14, padding:'14px 16px', background:'#AF52DE10', border:'1.5px solid #AF52DE40'}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                  <div>
+                    <div style={{fontWeight:700, fontSize:14, color:'#AF52DE'}}>💳 NC con abono a cuenta cliente</div>
+                    <div style={{fontSize:12, color:'#8E8E93', marginTop:3}}>
+                      NC N°{form3Data.bsale_doc_numero} · {fmt(form3Data.monto)} · La NC ya fue emitida
+                    </div>
+                  </div>
+                  <Bt variant='primary' sm onClick={async () => {
+                    if (!window.confirm('¿Confirmar cierre del caso? La NC de abono ya fue emitida.')) return
+                    try {
+                      await supabase.from('caso_form4_cierre').upsert({
+                        id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+                        caso_id: casoActual.id,
+                        cerrado_por: cu.id,
+                        cerrado_por_nombre: cu.nombre,
+                        cliente_conforme: true,
+                        fecha_cierre: new Date().toISOString().split('T')[0],
+                        observaciones_finales: 'NC abono emitida. Caso cerrado.'
+                      })
+                      await supabase.from('casos_postventa').update({ estado: 'cerrado' }).eq('id', casoActual.id)
+                      await supabase.from('caso_eventos').insert({
+                        id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+                        caso_id: casoActual.id,
+                        usuario_id: cu.id,
+                        usuario_nombre: cu.nombre,
+                        usuario_rol: cu.rol,
+                        evento: 'caso_cerrado',
+                        detalle: 'Caso cerrado con NC abono a cuenta cliente'
+                      })
+                      recargarCaso()
+                    } catch(e) { console.error(e) }
+                  }}>
+                    ✅ Confirmar cierre
+                  </Bt>
+                </div>
+              </div>
+            </div>
+          )
+        }
+
         if (!esTransfer) return null
         if (!['cerrado','transfer_pendiente','en_resolucion'].includes(casoActual.estado)) return null
         return (
@@ -2807,11 +2936,19 @@ const DetalleCaso = ({caso, cu, codigos, onClose, onRefresh}) => {
                       NC N°{form3Data.bsale_doc_numero} · {fmt(form3Data.monto)} · {form3Data.nombre_titular}
                     </div>
                   </div>
-                  {['caja','admin','gerencia'].includes(cu.rol) && (
-                    <Bt variant="success" sm onClick={() => setShowForm4T(true)}>
-                      Confirmar transferencia
-                    </Bt>
-                  )}
+                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                    {['admin','jefe_tienda','gerencia'].includes(cu.rol) && (
+                      <button onClick={() => { setShowCambioTipo(true); setCambioTipoDatos({ banco:'', tipo_cuenta:'Cuenta Corriente', num_cuenta:'', nombre_titular:'' }) }} style={{
+                        padding:'6px 12px', borderRadius:8, border:'1px solid var(--warning)',
+                        background:'var(--warning-bg)', color:'var(--warning)', fontSize:12, fontWeight:600, cursor:'pointer'
+                      }}>🔄 Cambiar método</button>
+                    )}
+                    {['caja','admin','gerencia'].includes(cu.rol) && (
+                      <Bt variant="success" sm onClick={() => setShowForm4T(true)}>
+                        Confirmar transferencia
+                      </Bt>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -3453,6 +3590,68 @@ const DetalleCaso = ({caso, cu, codigos, onClose, onRefresh}) => {
         onClose={() => setShowForm2(false)}
         onGuardado={onForm2Guardado}
       />
+    )}
+
+    {/* MODAL CAMBIO TIPO RESOLUCIÓN */}
+    {showCambioTipo && form3Data && casoActual && (
+      <div onClick={() => setShowCambioTipo(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,padding:20}}>
+        <div onClick={e => e.stopPropagation()} style={{background:'#fff',borderRadius:20,padding:28,width:'100%',maxWidth:460}}>
+          <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>🔄 Cambiar método de pago</div>
+          <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:12}}>
+            Caso {casoActual.numero} · Monto {fmt(form3Data.monto)}
+          </div>
+          <div style={{padding:'10px 14px',borderRadius:10,background:'var(--bg-hover)',marginBottom:10,fontSize:13}}>
+            <span style={{color:'var(--text-muted)'}}>Tipo actual: </span>
+            <strong>{form3Data.tipo_resolucion === 'nc_transfer' ? '🏦 Transferencia bancaria' : '💳 Abono cuenta cliente'}</strong>
+          </div>
+          <div style={{padding:'10px 14px',borderRadius:10,background:'var(--warning-bg)',border:'1px solid #FFE082',marginBottom:16,fontSize:12,color:'var(--warning-text)'}}>
+            ⚠️ Este cambio quedará registrado con fecha, hora y tu usuario en el historial del caso.
+          </div>
+          {/* Transfer → Abono */}
+          {form3Data.tipo_resolucion === 'nc_transfer' && (
+            <div>
+              <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>Cambiar a: <span style={{color:'var(--purple)'}}>💳 Abono cuenta cliente (NC)</span></div>
+              <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:16}}>Se eliminarán los datos bancarios: {form3Data.banco} · {form3Data.num_cuenta}</div>
+              <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+                <button onClick={() => setShowCambioTipo(false)} style={{padding:'10px 18px',borderRadius:10,background:'var(--bg-hover)',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:'var(--text-primary)'}}>Cancelar</button>
+                <button disabled={cambioTipoLoading} onClick={() => ejecutarCambioTipo('nc_abono', null)} style={{padding:'10px 18px',borderRadius:10,background:'var(--purple)',color:'#fff',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,opacity:cambioTipoLoading?0.6:1}}>
+                  {cambioTipoLoading ? 'Guardando...' : 'Confirmar cambio'}
+                </button>
+              </div>
+            </div>
+          )}
+          {/* Abono → Transfer */}
+          {(form3Data.tipo_resolucion === 'nc_abono' || form3Data.tipo_resolucion === 'nc_abono_cliente') && (
+            <div>
+              <div style={{fontSize:13,fontWeight:600,marginBottom:12}}>Cambiar a: <span style={{color:'var(--success)'}}>🏦 Transferencia bancaria</span></div>
+              {['banco','num_cuenta','nombre_titular'].map(k => (
+                <div key={k} style={{marginBottom:10}}>
+                  <label style={{display:'block',fontSize:12,fontWeight:600,color:'var(--text-secondary)',marginBottom:4}}>
+                    {k==='banco'?'Banco':k==='num_cuenta'?'Número de cuenta':'Nombre titular'} *
+                  </label>
+                  <input value={cambioTipoDatos[k]||''} onChange={e => setCambioTipoDatos(p=>({...p,[k]:e.target.value}))}
+                    style={{width:'100%',padding:'9px 12px',borderRadius:10,border:'1px solid var(--border-2)',fontSize:13,boxSizing:'border-box'}}
+                    placeholder={k==='banco'?'Ej: BancoEstado':k==='num_cuenta'?'Ej: 123456789':'Nombre completo'}/>
+                </div>
+              ))}
+              <div style={{marginBottom:14}}>
+                <label style={{display:'block',fontSize:12,fontWeight:600,color:'var(--text-secondary)',marginBottom:4}}>Tipo de cuenta *</label>
+                <select value={cambioTipoDatos.tipo_cuenta} onChange={e => setCambioTipoDatos(p=>({...p,tipo_cuenta:e.target.value}))} style={{width:'100%',padding:'9px 12px',borderRadius:10,border:'1px solid var(--border-2)',fontSize:13}}>
+                  <option>Cuenta Corriente</option><option>Cuenta Vista</option><option>Cuenta RUT</option><option>Cuenta de Ahorro</option>
+                </select>
+              </div>
+              <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+                <button onClick={() => setShowCambioTipo(false)} style={{padding:'10px 18px',borderRadius:10,background:'var(--bg-hover)',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:'var(--text-primary)'}}>Cancelar</button>
+                <button disabled={cambioTipoLoading||!cambioTipoDatos.banco||!cambioTipoDatos.num_cuenta||!cambioTipoDatos.nombre_titular}
+                  onClick={() => ejecutarCambioTipo('nc_transfer', cambioTipoDatos)}
+                  style={{padding:'10px 18px',borderRadius:10,background:(!cambioTipoDatos.banco||!cambioTipoDatos.num_cuenta||!cambioTipoDatos.nombre_titular)?'var(--text-disabled)':'var(--success)',color:'#fff',border:'none',cursor:'pointer',fontSize:13,fontWeight:600}}>
+                  {cambioTipoLoading ? 'Guardando...' : 'Confirmar cambio'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     )}
     </>
   )
@@ -6823,19 +7022,22 @@ export function PostventaApp({ cu, setAppActual }) {
   const [codigos,   setCodigos]   = useState([])
   const [capsLoaded, setCapsLoaded] = useState(false)
   const { isMobile, isXs } = useResponsive()
+
   const [tab,       setTab]       = useState(()=>{try{return localStorage.getItem('pv_tab')||'dashboard'}catch(e){return 'dashboard'}})
   const [modalNew,  setModalNew]  = useState(false)
   const [casoSel,   setCasoSel]   = useState(null)
 
-  // Carga inicial: usuarios, codigos + precargar capabilities RBAC
+  // Carga inicial: casos, usuarios, codigos + precargar capabilities RBAC
   useEffect(() => {
     ;(async () => {
-      const [{data: u}, {data: cod}] = await Promise.all([
+      const [{data: u}, {data: cod}, {data: cas}] = await Promise.all([
         supabase.from('usuarios').select('*').eq('activo', true),
         supabase.from('matriz_codigos').select('*').eq('activo', true).order('orden'),
+        supabase.from('casos_postventa').select('*').is('deleted_at', null).order('created_at', { ascending: false }),
       ])
       setUsers(u || [])
       setCodigos(cod || [])
+      setCasos(cas || [])
       setLoading(false)
     })()
   }, [])
@@ -6860,18 +7062,9 @@ export function PostventaApp({ cu, setAppActual }) {
     window.location.reload()
   }
 
-  // Cargar casos cuando hay usuario
-  useEffect(() => {
-    if (!cu) return
-    cargarCasos()
-  }, [cu])
-
   const cargarCasos = async () => {
-    const { data } = await supabase
-      .from('casos_postventa')
-      .select('*')
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
+    const { data } = await supabase.from('casos_postventa')
+      .select('*').is('deleted_at', null).order('created_at', { ascending: false })
     setCasos(data || [])
   }
 
@@ -7072,6 +7265,7 @@ export function PostventaApp({ cu, setAppActual }) {
           onRefresh={cargarCasos}
         />
       )}
+
     </div>
   )
 }
