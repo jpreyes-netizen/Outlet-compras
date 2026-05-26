@@ -54,7 +54,27 @@ async function fetchBsaleDia(fecha, sucursal_id, forzar = false) {
         .eq('fecha', fecha)
         .eq('sucursal_id', sucursal_id)
         .maybeSingle()
-      if (cached && cached.por_recaudador) {
+
+      // Regla de expiración del cache:
+      // - Día actual y día anterior: cache válido solo 1 hora (datos cambian frecuentemente)
+      // - Días antiguos (>2 días atrás): cache válido siempre (datos ya cerrados)
+      // - Cache vacío (total_venta=0): NUNCA usar, forzar re-sync (probablemente sync prematuro)
+      let cacheValido = !!cached?.por_recaudador
+      if (cached) {
+        const hoy = new Date().toISOString().split('T')[0]
+        const ayer = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+        const esReciente = fecha === hoy || fecha === ayer
+        const cacheVacio = (cached.total_venta ?? 0) === 0 && (cached.docs_venta ?? 0) === 0
+        if (cacheVacio) {
+          cacheValido = false  // cache vacío: siempre re-sync
+        } else if (esReciente) {
+          const edadMs = Date.now() - new Date(cached.sincronizado_at).getTime()
+          const unaHora = 60 * 60 * 1000
+          if (edadMs > unaHora) cacheValido = false
+        }
+      }
+
+      if (cacheValido) {
         return {
           total_venta: cached.total_venta,
           medios_global: cached.medios ?? {},
