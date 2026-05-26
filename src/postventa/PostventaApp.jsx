@@ -2863,7 +2863,7 @@ const DetalleCaso = ({caso, cu, codigos, onClose, onRefresh}) => {
         const yaEjecutada = casoActual.estado === "cerrado" && form4Data != null
 
         // NC Abono en resolución — mostrar botón de cierre directo
-        if (esAbono && casoActual.estado === 'en_resolucion' && h('cerrar_caso')) {
+        if (esAbono && casoActual.estado === 'en_resolucion' && ['admin','postventa','jefe_tienda','gerencia'].includes(cu.rol)) {
           return (
             <div style={{marginBottom:14}}>
               <div style={css.divider}/>
