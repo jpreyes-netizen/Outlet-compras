@@ -6970,6 +6970,12 @@ export function PostventaApp({ cu, setAppActual }) {
     window.location.reload()
   }
 
+  const cargarCasos = async () => {
+    const { data } = await supabase.from('casos_postventa')
+      .select('*').is('deleted_at', null).order('created_at', { ascending: false })
+    setCasos(data || [])
+  }
+
   const cargarUsers = async () => {
     const { data } = await supabase.from('usuarios').select('*').order('nombre')
     setUsers(data || [])
