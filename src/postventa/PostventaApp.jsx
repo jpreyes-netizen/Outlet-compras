@@ -6937,15 +6937,17 @@ export function PostventaApp({ cu, setAppActual }) {
   const [modalNew,  setModalNew]  = useState(false)
   const [casoSel,   setCasoSel]   = useState(null)
 
-  // Carga inicial: usuarios, codigos + precargar capabilities RBAC
+  // Carga inicial: casos, usuarios, codigos + precargar capabilities RBAC
   useEffect(() => {
     ;(async () => {
-      const [{data: u}, {data: cod}] = await Promise.all([
+      const [{data: u}, {data: cod}, {data: cas}] = await Promise.all([
         supabase.from('usuarios').select('*').eq('activo', true),
         supabase.from('matriz_codigos').select('*').eq('activo', true).order('orden'),
+        supabase.from('casos_postventa').select('*').is('deleted_at', null).order('created_at', { ascending: false }),
       ])
       setUsers(u || [])
       setCodigos(cod || [])
+      setCasos(cas || [])
       setLoading(false)
     })()
   }, [])
