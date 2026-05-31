@@ -139,10 +139,15 @@ export function AsisConfigSync({ cu }) {
             loading={accionActiva === 'sync_hhee'}
             onClick={() => ejecutar('sync_hhee', rango)}
           />
-          <SyncBtn label="Horas Fuera de Turno" ic="⏰"
+         <SyncBtn label="Horas Fuera de Turno" ic="⏰"
             desc={`Horas trabajadas fuera de turno sin autorización formal`}
             loading={accionActiva === 'sync_hhee_trabajadas'}
             onClick={() => ejecutar('sync_hhee_trabajadas', rango)}
+          />
+          <SyncBtn label="Horarios esperados" ic="📅"
+            desc={`Turnos asignados desde Workera (máx 60 días)`}
+            loading={accionActiva === 'sync_horarios'}
+            onClick={() => ejecutar('sync_horarios', rango)}
           />
         </div>
       </section>
