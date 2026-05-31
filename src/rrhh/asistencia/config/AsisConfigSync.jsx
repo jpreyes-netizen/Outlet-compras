@@ -134,10 +134,15 @@ export function AsisConfigSync({ cu }) {
             loading={accionActiva === 'sync_permisos'}
             onClick={() => ejecutar('sync_permisos', rango)}
           />
-          <SyncBtn label="Horas Extras" ic="⏱"
-            desc={`Autorizaciones de HHEE en el rango`}
+         <SyncBtn label="Horas Extras (autorizadas)" ic="⏱"
+            desc={`Autorizaciones formales de HHEE en el rango`}
             loading={accionActiva === 'sync_hhee'}
             onClick={() => ejecutar('sync_hhee', rango)}
+          />
+          <SyncBtn label="Horas Fuera de Turno" ic="⏰"
+            desc={`Horas trabajadas fuera de turno sin autorización formal`}
+            loading={accionActiva === 'sync_hhee_trabajadas'}
+            onClick={() => ejecutar('sync_hhee_trabajadas', rango)}
           />
         </div>
       </section>
