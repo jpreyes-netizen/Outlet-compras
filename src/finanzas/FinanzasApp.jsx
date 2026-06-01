@@ -5,6 +5,8 @@ import { FinDashboard } from './FinDashboard'
 import { FinConciliacion } from './FinConciliacion'
 import { FinTesoreria } from './FinTesoreria'
 import { FinPresupuesto } from './FinPresupuesto'
+import { GmDashboard } from './gastos_menores/GmDashboard'
+import { GmMovimientos } from './gastos_menores/GmMovimientos'
 import { Toaster } from 'sonner'
 
 const ROLES=[
@@ -24,6 +26,8 @@ const ALL_FIN_TABS = [
   { k: "conciliacion", l: "Conciliación", ic: "🔄", cap: "fin.conciliacion" },
   { k: "tesoreria",    l: "Tesorería",    ic: "💵", cap: "fin.tesoreria" },
   { k: "presupuesto",  l: "Presupuesto",  ic: "📈", cap: "fin.presupuesto" }
+  { k: "gm_dashboard", l: "Gastos",       ic: "💸", cap: "gm.dashboard" },
+  { k: "gm_movs",      l: "Movimientos",  ic: "📒", cap: "gm.movimientos" }
 ]
 
 export function FinanzasApp({ cu, setAppActual }) {
@@ -159,6 +163,8 @@ export function FinanzasApp({ cu, setAppActual }) {
       {tabValido === "conciliacion" && <FinConciliacion cu={cu} isMobile={isMobile} />}
       {tabValido === "tesoreria" && <FinTesoreria cu={cu} isMobile={isMobile} rol={cu?.rol} />}
       {tabValido === "presupuesto" && <FinPresupuesto cu={cu} isMobile={isMobile} />}
+      {tabValido === "gm_dashboard" && <GmDashboard cu={cu} isMobile={isMobile} />}
+      {tabValido === "gm_movs" && <GmMovimientos cu={cu} isMobile={isMobile} />}
 
       {/* TOASTER */}
       <Toaster richColors position="top-right" />
