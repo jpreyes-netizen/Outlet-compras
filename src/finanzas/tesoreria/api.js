@@ -60,9 +60,19 @@ export async function actualizarDeclaracion(id, p) {
   return data
 }
 
+// Normaliza IDs de sub-sucursales (com-XX, ops-XX → suc-XX).
+// Defensa contra IDs crudos de Gm (caja chica) llegando a tablas de tesorería.
+// Si rawId es 'com-lg' u 'ops-lg' → 'suc-lg'. Si ya es 'suc-XX' u otro, devuelve igual.
+function normalizarSucursalId(rawId) {
+  if (!rawId) return rawId
+  const m = rawId.match(/^(com|ops)-(.+)$/)
+  if (m) return 'suc-' + m[2]
+  return rawId
+}
+
 function buildRow(p, uid) {
   return {
-    fecha: p.fecha, sucursal_id: p.sucursal_id, vendedor_id: p.vendedor_id,
+    fecha: p.fecha, sucursal_id: normalizarSucursalId(p.sucursal_id), vendedor_id: p.vendedor_id,
     bsale_vendedor_id: p.bsale_vendedor_id ?? null,
     firmado_por_usuario_id: p.firmado_por_usuario_id ?? uid ?? null,
     firmado_por_nombre: p.firmado_por_nombre ?? null,
