@@ -1,0 +1,165 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1100" font-family="Arial, sans-serif">
+  <defs>
+    <linearGradient id="hdr" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#16213e"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+    <marker id="arrowred" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#DC2626"/>
+    </marker>
+    <filter id="shadow"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.15"/></filter>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="70" fill="url(#hdr)"/>
+  <text x="40" y="42" fill="#fff" font-size="22" font-weight="700">Flujograma Detallado 1: Declaración de Cierre del Día</text>
+  <text x="40" y="62" fill="#9CA3AF" font-size="12">Proceso operativo del cajero · Tab "Cierre del día" · CierreDelDiaTab.jsx</text>
+
+  <!-- INICIO -->
+  <g filter="url(#shadow)">
+    <ellipse cx="600" cy="120" rx="80" ry="25" fill="#1e3a5f"/>
+    <text x="600" y="125" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">INICIO</text>
+  </g>
+  <line x1="600" y1="145" x2="600" y2="170" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Login -->
+  <g filter="url(#shadow)">
+    <rect x="490" y="175" width="220" height="55" rx="6" fill="#fff" stroke="#3B82F6" stroke-width="1.5"/>
+    <text x="600" y="200" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">1. Cajero ingresa al sistema</text>
+    <text x="600" y="218" text-anchor="middle" font-size="10" fill="#6B7280">Supabase Auth + permisos finanzas.cajero</text>
+  </g>
+  <line x1="600" y1="230" x2="600" y2="255" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Selecciona tab Tesorería → Cierre del día -->
+  <g filter="url(#shadow)">
+    <rect x="490" y="260" width="220" height="55" rx="6" fill="#fff" stroke="#3B82F6" stroke-width="1.5"/>
+    <text x="600" y="285" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">2. Abre Tesorería → Cierre del día</text>
+    <text x="600" y="303" text-anchor="middle" font-size="10" fill="#6B7280">Sucursal forzada al rol · fecha = hoy</text>
+  </g>
+  <line x1="600" y1="315" x2="600" y2="340" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Sistema carga BSALE -->
+  <g filter="url(#shadow)">
+    <rect x="490" y="345" width="220" height="60" rx="6" fill="#F3E8FF" stroke="#8B5CF6" stroke-width="1.5"/>
+    <text x="600" y="368" text-anchor="middle" font-size="12" font-weight="600" fill="#6B21A8">3. Sistema carga BSALE del día</text>
+    <text x="600" y="385" text-anchor="middle" font-size="10" fill="#6B21A8">Cache-first (ventas_bsale_dia)</text>
+    <text x="600" y="397" text-anchor="middle" font-size="10" fill="#6B21A8">fallback: edge function bsale-ventas-dia</text>
+  </g>
+  <line x1="600" y1="405" x2="600" y2="430" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Sistema muestra tabla recaudadores -->
+  <g filter="url(#shadow)">
+    <rect x="430" y="435" width="340" height="65" rx="6" fill="#F3E8FF" stroke="#8B5CF6" stroke-width="1.5"/>
+    <text x="600" y="460" text-anchor="middle" font-size="12" font-weight="600" fill="#6B21A8">4. Muestra tabla de recaudadores BSALE</text>
+    <text x="600" y="478" text-anchor="middle" font-size="10" fill="#6B21A8">Un row por cada cajero con venta del día. Si el cajero tiene</text>
+    <text x="600" y="491" text-anchor="middle" font-size="10" fill="#6B21A8">cierre previo, se cruza por bsale_vendedor_id o nombre normalizado.</text>
+  </g>
+  <line x1="600" y1="500" x2="600" y2="525" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Decisión: ya hay cierre? -->
+  <g filter="url(#shadow)">
+    <path d="M600,530 L720,580 L600,630 L480,580 z" fill="#FEF9C3" stroke="#D97706" stroke-width="1.5"/>
+    <text x="600" y="575" text-anchor="middle" font-size="11" font-weight="700" fill="#92400E">¿Ya existe</text>
+    <text x="600" y="590" text-anchor="middle" font-size="11" font-weight="700" fill="#92400E">un cierre</text>
+    <text x="600" y="605" text-anchor="middle" font-size="11" font-weight="700" fill="#92400E">declarado?</text>
+  </g>
+
+  <!-- NO -> declarar -->
+  <line x1="480" y1="580" x2="300" y2="580" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="390" y="572" text-anchor="middle" font-size="11" font-weight="700" fill="#16A34A">NO</text>
+
+  <!-- SI -> ver -->
+  <line x1="720" y1="580" x2="900" y2="580" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="810" y="572" text-anchor="middle" font-size="11" font-weight="700" fill="#D97706">SÍ</text>
+
+  <!-- Camino NO: Click "Declarar →" -->
+  <g filter="url(#shadow)">
+    <rect x="100" y="555" width="200" height="55" rx="6" fill="#fff" stroke="#3B82F6" stroke-width="1.5"/>
+    <text x="200" y="580" text-anchor="middle" font-size="11" font-weight="600" fill="#111827">5a. Click "Declarar →"</text>
+    <text x="200" y="597" text-anchor="middle" font-size="10" fill="#6B7280">Abre panel lateral derecho</text>
+  </g>
+  <line x1="200" y1="610" x2="200" y2="640" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Camino SI: Ver cierre existente -->
+  <g filter="url(#shadow)">
+    <rect x="900" y="555" width="200" height="55" rx="6" fill="#fff" stroke="#3B82F6" stroke-width="1.5"/>
+    <text x="1000" y="580" text-anchor="middle" font-size="11" font-weight="600" fill="#111827">5b. Click "Ver →"</text>
+    <text x="1000" y="597" text-anchor="middle" font-size="10" fill="#6B7280">Solo lectura si estado ≠ declarado</text>
+  </g>
+
+  <!-- Ingresar valores -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="645" width="300" height="75" rx="6" fill="#fff" stroke="#3B82F6" stroke-width="1.5"/>
+    <text x="200" y="670" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">6. Ingresa montos por medio de pago</text>
+    <text x="200" y="688" text-anchor="middle" font-size="10" fill="#6B7280">Principales: efectivo · t_credito · t_debito ·</text>
+    <text x="200" y="700" text-anchor="middle" font-size="10" fill="#6B7280">webpay · transferencia. Otros desplegables.</text>
+    <text x="200" y="713" text-anchor="middle" font-size="10" fill="#6B7280">Sistema muestra brecha vs BSALE en vivo.</text>
+  </g>
+  <line x1="200" y1="720" x2="200" y2="755" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Observación opcional -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="760" width="300" height="50" rx="6" fill="#fff" stroke="#3B82F6" stroke-width="1.5"/>
+    <text x="200" y="785" text-anchor="middle" font-size="11" font-weight="600" fill="#111827">7. (Opcional) Observaciones</text>
+    <text x="200" y="802" text-anchor="middle" font-size="10" fill="#6B7280">Notas del vendedor para el admin</text>
+  </g>
+  <line x1="200" y1="810" x2="200" y2="840" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Firma -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="845" width="300" height="55" rx="6" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.5"/>
+    <text x="200" y="870" text-anchor="middle" font-size="12" font-weight="700" fill="#065F46">8. Click "Firmar cierre"</text>
+    <text x="200" y="888" text-anchor="middle" font-size="10" fill="#065F46">Acto formal: cajero asume responsabilidad</text>
+  </g>
+  <line x1="200" y1="900" x2="200" y2="925" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Sistema valida y guarda -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="930" width="300" height="80" rx="6" fill="#F3E8FF" stroke="#8B5CF6" stroke-width="1.5"/>
+    <text x="200" y="955" text-anchor="middle" font-size="12" font-weight="600" fill="#6B21A8">9. Sistema valida e inserta cierre</text>
+    <text x="200" y="973" text-anchor="middle" font-size="10" fill="#6B21A8">INSERT en cierres_caja</text>
+    <text x="200" y="986" text-anchor="middle" font-size="10" fill="#6B21A8">estado = "declarado"</text>
+    <text x="200" y="999" text-anchor="middle" font-size="10" fill="#6B21A8">vendedor_id, bsale_vendedor_id, todos los medios</text>
+  </g>
+  <line x1="350" y1="970" x2="490" y2="970" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- FIN -->
+  <g filter="url(#shadow)">
+    <ellipse cx="600" cy="970" rx="100" ry="30" fill="#1e3a5f"/>
+    <text x="600" y="968" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">CIERRE DECLARADO</text>
+    <text x="600" y="983" text-anchor="middle" font-size="10" fill="#D1D5DB">queda pendiente corroboración</text>
+  </g>
+
+  <!-- LEYENDA derecha -->
+  <g transform="translate(800, 645)">
+    <rect x="0" y="0" width="350" height="280" fill="#fff" stroke="#E5E7EB" rx="8"/>
+    <rect x="0" y="0" width="350" height="28" fill="#1e3a5f" rx="8"/>
+    <text x="15" y="19" fill="#fff" font-size="12" font-weight="700">Validaciones y reglas</text>
+
+    <g transform="translate(15, 45)" font-size="10" fill="#374151">
+      <text y="0" font-weight="700">Antes de firmar</text>
+      <text y="15">• Total declarado ≠ Σ(medios) → error</text>
+      <text y="30">• Si campo numérico vacío se asume 0</text>
+      <text y="45">• Brecha vs BSALE se muestra en chip</text>
+
+      <text y="75" font-weight="700">Captura de datos clave</text>
+      <text y="90">• vendedor_id: cajero logueado o seleccionado</text>
+      <text y="105">• bsale_vendedor_id: ID del recaudador</text>
+      <text y="120">• sucursal_id: forzada por rol (suc-XX normalizado)</text>
+      <text y="135">• fecha: hoy (configurable solo admin)</text>
+
+      <text y="165" font-weight="700">Defensa contra inputs malos</text>
+      <text y="180">• normalizarSucursalId(): com-XX, ops-XX → suc-XX</text>
+      <text y="195">• Cierre por cajero+día único (no duplicado)</text>
+      <text y="210">• Si ya existe, abre en modo "Actualizar"</text>
+
+      <text y="240" font-weight="700">Después de firmar</text>
+      <text y="255">• onGuardado() recarga cierres desde BD</text>
+    </g>
+  </g>
+
+  <!-- Footer -->
+  <text x="40" y="1080" fill="#9CA3AF" font-size="10">Outlet de Puertas SpA · Manual Tesorería · Flujograma 1/3</text>
+</svg>

@@ -1,0 +1,226 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200" font-family="Arial, sans-serif">
+  <defs>
+    <linearGradient id="hdr" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#16213e"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+    <filter id="shadow"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.15"/></filter>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="70" fill="url(#hdr)"/>
+  <text x="40" y="42" fill="#fff" font-size="22" font-weight="700">Flujograma Detallado 2: Corroboración de Cierre</text>
+  <text x="40" y="62" fill="#9CA3AF" font-size="12">Proceso de control · Tab "Cierre del día" · Admin / Jefe / Tesorero</text>
+
+  <!-- INICIO -->
+  <g filter="url(#shadow)">
+    <ellipse cx="450" cy="120" rx="100" ry="25" fill="#1e3a5f"/>
+    <text x="450" y="125" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">CIERRE DECLARADO</text>
+  </g>
+  <line x1="450" y1="145" x2="450" y2="170" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- 1. Admin abre tab -->
+  <g filter="url(#shadow)">
+    <rect x="320" y="175" width="260" height="55" rx="6" fill="#fff" stroke="#3B82F6" stroke-width="1.5"/>
+    <text x="450" y="200" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">1. Admin abre Cierre del día</text>
+    <text x="450" y="218" text-anchor="middle" font-size="10" fill="#6B7280">Ve todos los cajeros con cierres pendientes</text>
+  </g>
+  <line x1="450" y1="230" x2="450" y2="255" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- 2. Click "Corroborar →" -->
+  <g filter="url(#shadow)">
+    <rect x="320" y="260" width="260" height="55" rx="6" fill="#fff" stroke="#3B82F6" stroke-width="1.5"/>
+    <text x="450" y="285" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">2. Click "Corroborar →" en una fila</text>
+    <text x="450" y="303" text-anchor="middle" font-size="10" fill="#6B7280">Abre panel derecho con BSALE + declarado</text>
+  </g>
+  <line x1="450" y1="315" x2="450" y2="340" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- 3. Cuenta efectivo físico -->
+  <g filter="url(#shadow)">
+    <rect x="320" y="345" width="260" height="80" rx="6" fill="#DBEAFE" stroke="#2563EB" stroke-width="1.5"/>
+    <text x="450" y="370" text-anchor="middle" font-size="12" font-weight="700" fill="#1E40AF">3. Cuenta efectivo físico</text>
+    <text x="450" y="388" text-anchor="middle" font-size="10" fill="#1E40AF">Ingresa monto contado en efectivo_corrob</text>
+    <text x="450" y="402" text-anchor="middle" font-size="10" fill="#1E40AF">Confirma o ajusta otros medios:</text>
+    <text x="450" y="415" text-anchor="middle" font-size="10" fill="#1E40AF">t_credito_corrob, t_debito_corrob, webpay_corrob, etc.</text>
+  </g>
+  <line x1="450" y1="425" x2="450" y2="455" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- 4. Sistema calcula diferencias -->
+  <g filter="url(#shadow)">
+    <rect x="280" y="460" width="340" height="75" rx="6" fill="#F3E8FF" stroke="#8B5CF6" stroke-width="1.5"/>
+    <text x="450" y="485" text-anchor="middle" font-size="12" font-weight="700" fill="#6B21A8">4. Sistema calcula en tiempo real</text>
+    <text x="450" y="502" text-anchor="middle" font-size="10" fill="#6B21A8">difEfectivo = efectivo_corrob - efectivo_declarado</text>
+    <text x="450" y="515" text-anchor="middle" font-size="10" fill="#6B21A8">totalCorrob = Σ(medios_corrob)</text>
+    <text x="450" y="528" text-anchor="middle" font-size="10" fill="#6B21A8">difTotal = |totalCorrob - total_declarado|</text>
+  </g>
+  <line x1="450" y1="535" x2="450" y2="565" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- 5. Decisión: hay diferencia? -->
+  <g filter="url(#shadow)">
+    <path d="M450,570 L580,625 L450,680 L320,625 z" fill="#FEF9C3" stroke="#D97706" stroke-width="1.5"/>
+    <text x="450" y="615" text-anchor="middle" font-size="11" font-weight="700" fill="#92400E">¿difEfectivo</text>
+    <text x="450" y="630" text-anchor="middle" font-size="11" font-weight="700" fill="#92400E">≠ 0 o difTotal</text>
+    <text x="450" y="645" text-anchor="middle" font-size="11" font-weight="700" fill="#92400E">&gt; umbral?</text>
+  </g>
+
+  <!-- NO -> cuadra -->
+  <line x1="320" y1="625" x2="180" y2="625" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="250" y="617" text-anchor="middle" font-size="11" font-weight="700" fill="#16A34A">NO</text>
+
+  <!-- SI -> requiere observación -->
+  <line x1="580" y1="625" x2="720" y2="625" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="650" y="617" text-anchor="middle" font-size="11" font-weight="700" fill="#DC2626">SÍ</text>
+
+  <!-- Camino NO: cuadra -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="600" width="130" height="50" rx="6" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.5"/>
+    <text x="115" y="623" text-anchor="middle" font-size="12" font-weight="700" fill="#065F46">CUADRA</text>
+    <text x="115" y="640" text-anchor="middle" font-size="9" fill="#065F46">estado: cuadra</text>
+  </g>
+
+  <!-- Camino SI: requiere observación -->
+  <g filter="url(#shadow)">
+    <rect x="720" y="600" width="200" height="65" rx="6" fill="#FEE2E2" stroke="#DC2626" stroke-width="1.5"/>
+    <text x="820" y="625" text-anchor="middle" font-size="12" font-weight="700" fill="#7F1D1D">6. Observación admin</text>
+    <text x="820" y="643" text-anchor="middle" font-size="10" fill="#7F1D1D">OBLIGATORIA</text>
+    <text x="820" y="657" text-anchor="middle" font-size="9" fill="#7F1D1D">explica la diferencia</text>
+  </g>
+
+  <!-- Conectar caminos hacia abajo -->
+  <line x1="115" y1="650" x2="115" y2="730" stroke="#374151" stroke-width="1.5"/>
+  <line x1="820" y1="665" x2="820" y2="730" stroke="#374151" stroke-width="1.5"/>
+
+  <!-- 7. Click Confirmar corroboración -->
+  <g filter="url(#shadow)">
+    <rect x="320" y="730" width="260" height="55" rx="6" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.5"/>
+    <text x="450" y="755" text-anchor="middle" font-size="12" font-weight="700" fill="#065F46">7. Click "Confirmar corroboración"</text>
+    <text x="450" y="773" text-anchor="middle" font-size="10" fill="#065F46">Sistema clasifica estado final</text>
+  </g>
+  <line x1="115" y1="730" x2="320" y2="730" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="820" y1="730" x2="580" y2="730" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="450" y1="785" x2="450" y2="815" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- 8. Sistema clasifica -->
+  <g filter="url(#shadow)">
+    <rect x="260" y="820" width="380" height="115" rx="6" fill="#F3E8FF" stroke="#8B5CF6" stroke-width="1.5"/>
+    <text x="450" y="843" text-anchor="middle" font-size="12" font-weight="700" fill="#6B21A8">8. Sistema clasifica el estado final</text>
+    <text x="280" y="865" font-size="10" fill="#6B21A8" font-family="Consolas, monospace">si difEfectivo ≠ 0 → estado = "descuadre"</text>
+    <text x="280" y="881" font-size="10" fill="#6B21A8" font-family="Consolas, monospace">si difTotal ≤ umbral_cuadra → "cuadra"</text>
+    <text x="280" y="897" font-size="10" fill="#6B21A8" font-family="Consolas, monospace">si difTotal ≤ umbral_tolerable → "tolerable"</text>
+    <text x="280" y="913" font-size="10" fill="#6B21A8" font-family="Consolas, monospace">si difTotal &gt; umbral_tolerable → "descuadre"</text>
+  </g>
+  <line x1="450" y1="935" x2="450" y2="965" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- 9. Branch: difEfectivo != 0 -->
+  <g filter="url(#shadow)">
+    <path d="M450,970 L600,1010 L450,1050 L300,1010 z" fill="#FEE2E2" stroke="#DC2626" stroke-width="1.5"/>
+    <text x="450" y="1005" text-anchor="middle" font-size="11" font-weight="700" fill="#7F1D1D">¿difEfectivo</text>
+    <text x="450" y="1020" text-anchor="middle" font-size="11" font-weight="700" fill="#7F1D1D">≠ 0?</text>
+  </g>
+
+  <!-- 10a. Si -> insertar en descuadres_cobranza -->
+  <line x1="600" y1="1010" x2="720" y2="1010" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="660" y="1002" text-anchor="middle" font-size="11" font-weight="700" fill="#DC2626">SÍ</text>
+  <g filter="url(#shadow)">
+    <rect x="720" y="980" width="220" height="65" rx="6" fill="#FEE2E2" stroke="#DC2626" stroke-width="1.5"/>
+    <text x="830" y="1005" text-anchor="middle" font-size="11" font-weight="700" fill="#7F1D1D">9a. INSERT en</text>
+    <text x="830" y="1022" text-anchor="middle" font-size="11" font-weight="700" fill="#7F1D1D" font-family="Consolas, monospace">descuadres_cobranza</text>
+    <text x="830" y="1037" text-anchor="middle" font-size="9" fill="#7F1D1D">cajero asume el faltante</text>
+  </g>
+
+  <!-- 10b. No -> seguir -->
+  <line x1="300" y1="1010" x2="200" y2="1010" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="250" y="1002" text-anchor="middle" font-size="11" font-weight="700" fill="#16A34A">NO</text>
+  <g filter="url(#shadow)">
+    <rect x="50" y="985" width="150" height="50" rx="6" fill="#fff" stroke="#9CA3AF" stroke-width="1.5"/>
+    <text x="125" y="1010" text-anchor="middle" font-size="11" fill="#374151">(sin descuadre)</text>
+    <text x="125" y="1024" text-anchor="middle" font-size="9" fill="#6B7280">paso siguiente</text>
+  </g>
+
+  <!-- 11. Sistema dispara upsertDepositoEfectivoAutoCierre -->
+  <line x1="125" y1="1035" x2="125" y2="1085" stroke="#374151" stroke-width="1.5"/>
+  <line x1="830" y1="1045" x2="830" y2="1085" stroke="#374151" stroke-width="1.5"/>
+  <line x1="125" y1="1085" x2="830" y2="1085" stroke="#374151" stroke-width="1.5"/>
+  <line x1="450" y1="1085" x2="450" y2="1100" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="260" y="1105" width="380" height="60" rx="6" fill="#1e3a5f" stroke="#1a2f4a" stroke-width="1.5"/>
+    <text x="450" y="1130" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">10. upsertDepositoEfectivoAutoCierre()</text>
+    <text x="450" y="1148" text-anchor="middle" font-size="9" fill="#D1D5DB">crea/actualiza línea pendiente en depositos_efectivo</text>
+    <text x="450" y="1160" text-anchor="middle" font-size="9" fill="#D1D5DB">con Σ(efectivo_corrob) del día×sucursal</text>
+  </g>
+
+  <!-- LEYENDA derecha -->
+  <g transform="translate(960, 175)">
+    <rect x="0" y="0" width="220" height="780" fill="#fff" stroke="#E5E7EB" rx="8"/>
+    <rect x="0" y="0" width="220" height="28" fill="#1e3a5f" rx="8"/>
+    <text x="15" y="19" fill="#fff" font-size="12" font-weight="700">Umbrales</text>
+
+    <g transform="translate(15, 45)" font-size="10" fill="#374151">
+      <text y="0" font-weight="700">Tabla: parametros_sistema</text>
+      <text y="18">tesoreria_umbral_cuadra</text>
+      <text y="30" font-weight="700" fill="#16A34A">$1.000 default</text>
+      <text y="50">tesoreria_umbral_tolerable</text>
+      <text y="62" font-weight="700" fill="#D97706">$50.000 default</text>
+    </g>
+
+    <g transform="translate(0, 145)">
+      <rect x="0" y="0" width="220" height="28" fill="#1e3a5f"/>
+      <text x="15" y="19" fill="#fff" font-size="12" font-weight="700">Estados resultantes</text>
+    </g>
+    <g transform="translate(15, 195)" font-size="10">
+      <rect x="0" y="0" width="12" height="12" fill="#16A34A"/>
+      <text x="20" y="10" fill="#374151" font-weight="700">cuadra</text>
+      <text x="20" y="25" fill="#6B7280">dif ≤ $1.000</text>
+
+      <rect x="0" y="48" width="12" height="12" fill="#D97706"/>
+      <text x="20" y="58" fill="#374151" font-weight="700">tolerable</text>
+      <text x="20" y="73" fill="#6B7280">$1.000 &lt; dif ≤ $50.000</text>
+
+      <rect x="0" y="96" width="12" height="12" fill="#DC2626"/>
+      <text x="20" y="106" fill="#374151" font-weight="700">descuadre</text>
+      <text x="20" y="121" fill="#6B7280">dif &gt; $50.000</text>
+      <text x="20" y="134" fill="#6B7280">o efectivo no cuadra</text>
+    </g>
+
+    <g transform="translate(0, 365)">
+      <rect x="0" y="0" width="220" height="28" fill="#1e3a5f"/>
+      <text x="15" y="19" fill="#fff" font-size="12" font-weight="700">Permisos</text>
+    </g>
+    <g transform="translate(15, 410)" font-size="10" fill="#374151">
+      <text y="0" font-weight="700">Capability:</text>
+      <text y="13" font-family="Consolas, monospace" font-size="9">fin.teso.cierre.corroborar</text>
+      <text y="35" font-weight="700">Roles permitidos:</text>
+      <text y="50">• finanzas.admin</text>
+      <text y="65">• finanzas.tesorero</text>
+      <text y="80">• finanzas.jefe_tienda</text>
+
+      <text y="110" font-weight="700">Scope:</text>
+      <text y="125">all → todas las sucursales</text>
+      <text y="138">sucursal → solo la propia</text>
+    </g>
+
+    <g transform="translate(0, 580)">
+      <rect x="0" y="0" width="220" height="28" fill="#1e3a5f"/>
+      <text x="15" y="19" fill="#fff" font-size="12" font-weight="700">Casos especiales</text>
+    </g>
+    <g transform="translate(15, 625)" font-size="10" fill="#374151">
+      <text y="0" font-weight="700">Falta efectivo (frecuente):</text>
+      <text y="15">"Faltan monedas, $-1.500"</text>
+      <text y="28" fill="#DC2626">→ estado: descuadre</text>
+      <text y="41" fill="#DC2626">→ registra cobranza al cajero</text>
+
+      <text y="65" font-weight="700">Sobre tolerable:</text>
+      <text y="80">"Cajero olvidó incluir 1 venta"</text>
+      <text y="93" fill="#DC2626">→ estado: descuadre</text>
+
+      <text y="115" font-weight="700">Anular:</text>
+      <text y="130">Solo admin</text>
+      <text y="143">estado = "anulado"</text>
+    </g>
+  </g>
+
+  <text x="40" y="1190" fill="#9CA3AF" font-size="10">Outlet de Puertas SpA · Manual Tesorería · Flujograma 2/3</text>
+</svg>
