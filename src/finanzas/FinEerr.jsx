@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { EerrEstadoResultados } from './presupuesto/EerrEstadoResultados'
 import { EerrDashboard } from './presupuesto/EerrDashboard'
 import { EstadoClasificacionDashboard } from './presupuesto/EstadoClasificacionDashboard'
+import { CargaCostos } from './presupuesto/CargaCostos'
 
 /* ═══ FIN EERR ═══
    Contenedor de Estado de Resultados, Dashboard EERR y Clasificación.
@@ -13,6 +14,7 @@ const TABS = [
   { k: 'eerr',          l: 'Estado de Resultados' },
   { k: 'dashboard',     l: 'Dashboard EERR' },
   { k: 'clasificacion', l: 'Estado Clasificación' },
+  { k: 'costos',        l: 'Carga Costos' },
 ]
 
 export function FinEerr({ cu, isMobile }) {
@@ -41,6 +43,7 @@ export function FinEerr({ cu, isMobile }) {
       {tab === 'eerr' && <EerrEstadoResultados />}
       {tab === 'dashboard' && <EerrDashboard />}
       {tab === 'clasificacion' && <EstadoClasificacionDashboard />}
+      {tab === 'costos' && <CargaCostos cu={cu} />}
     </div>
   )
 }
