@@ -62,7 +62,7 @@ export function GmMovimientos({ cu, isMobile }) {
           .limit(500)
       ])
       // Filtrar fondos por scope del usuario (sucursal asignada en usuario_acceso)
-      const miScope = userScopeSync(cu, 'finanzas', 'gm.movimientos')
+      const miScope = userScopeSync(cu, 'finanzas', 'gm.movimientos', { raw: true })
       const fondosVisibles = (fs || []).filter(f => !miScope || f.sucursal_id === miScope)
       setFondos(fondosVisibles)
       setCats(cs || [])
