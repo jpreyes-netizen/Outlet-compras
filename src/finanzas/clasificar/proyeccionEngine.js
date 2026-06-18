@@ -91,6 +91,7 @@ export async function cargarDatosProyeccion(anio) {
   let remTotal = 0
   const remByDay = {}
   const mesesConRem = new Set()
+  const realMensual = {}; for (let m = 1; m <= 12; m++) realMensual[m] = { ingreso: 0, egreso: 0 }
   for (const mv of movs ?? []) {
     const monto = Math.abs(Number(mv.monto) || 0)
     const esAbono = mv.tipo === 'ABONO'
@@ -99,8 +100,13 @@ export async function cargarDatosProyeccion(anio) {
     const cod  = cmId ? cmCodigo.get(cmId) : null
     if (tipo === 'traspaso') continue
     saldoHoy += esAbono ? monto : -monto
+    const mesMv = mv.mes_nominal ?? parseInt(String(mv.fecha).split('-')[1], 10)
+    if (mesMv >= 1 && mesMv <= 12) {
+      if (esAbono) realMensual[mesMv].ingreso += monto
+      else realMensual[mesMv].egreso += monto
+    }
     if (!esAbono && REM_CODIGOS.includes(cod)) {
-      const mes = mv.mes_nominal ?? parseInt(String(mv.fecha).split('-')[1], 10)
+      const mes = mesMv
       const dia = parseInt(String(mv.fecha).split('-')[2], 10)
       if (mes < mesCorte) { remTotal += monto; remByDay[dia] = (remByDay[dia] || 0) + monto; mesesConRem.add(mes) }
     }
@@ -130,7 +136,33 @@ export async function cargarDatosProyeccion(anio) {
 
   const impuestos = (impR.data ?? []).map(r => ({ id: r.id, fecha: r.fecha, monto: Number(r.monto) || 0, concepto: r.concepto, categoria: r.categoria }))
 
-  return { saldoHoy, remMensual, remShareByDay, pagos, creditos, overheadMes, impuestos, hoyY, hoyM, hoyD }
+  return { saldoHoy, remMensual, remShareByDay, pagos, creditos, overheadMes, impuestos, realMensual, mesCorte, hoyY, hoyM, hoyD }
+}
+
+// ── Proyección MENSUAL del año completo (para comparar Real vs Proyectado) ──
+// Agrega los mismos componentes del motor por mes calendario (sin corte "hoy").
+export function proyectarMensual(raw, venta, feriados, anio) {
+  if (!raw) return {}
+  const { remMensual, overheadMes, pagos, creditos, impuestos, hoyM } = raw
+  const out = {}
+  for (let m = 1; m <= 12; m++) {
+    out[m] = {
+      ingreso: diasHabilesMes(anio, m, feriados) * (venta[m] || 0),
+      rem: remMensual,
+      overhead: overheadMes[m] || 0,
+      compras: 0, cred: 0, imp: 0,
+    }
+  }
+  const mesDe = (fechaISO) => {
+    if (!fechaISO) return hoyM
+    const mm = parseInt(String(fechaISO).split('-')[1], 10)
+    return (mm >= 1 && mm <= 12) ? mm : hoyM
+  }
+  pagos.forEach(p => { out[mesDe(p.fecha)].compras += p.monto })
+  creditos.forEach(c => { const mm = mesDe(c.fecha); if (out[mm]) out[mm].cred += c.monto })
+  impuestos.forEach(i => { const mm = mesDe(i.fecha); if (out[mm]) out[mm].imp += i.monto })
+  for (let m = 1; m <= 12; m++) out[m].egreso = out[m].rem + out[m].overhead + out[m].compras + out[m].cred + out[m].imp
+  return out
 }
 
 // ── Construye proyección semanal. opts.ventaMult escala los ingresos (escenarios). ──

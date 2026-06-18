@@ -3,10 +3,11 @@ import { toast } from 'sonner'
 import { Loader2, Save, AlertTriangle, AlertCircle, CheckCircle2, TrendingDown, Activity, CalendarClock } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, CartesianGrid, Legend } from 'recharts'
 import { supabase } from '../../supabase'
-import { cargarDatosProyeccion, construirProyeccion, analizarRiesgos, rangoSemana, fmtCLP, fmtCLPplano, fmtMM } from './proyeccionEngine'
+import { cargarDatosProyeccion, construirProyeccion, analizarRiesgos, proyectarMensual, rangoSemana, fmtCLP, fmtCLPplano, fmtMM } from './proyeccionEngine'
 
 const PRIMARY = '#1F4E79'
 const ANIOS = [2024, 2025, 2026, 2027]
+const MESES_L = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 const CAT = [
   { k: 'compras',  l: 'Compras',         c: '#DC2626' },
   { k: 'rem',      l: 'Remuneraciones',  c: '#D97706' },
@@ -71,6 +72,9 @@ export function AnalisisRiesgoTab({ anio, setAnio }) {
 
   const escData = { base, opt, pes, stress }
   const alertas = useMemo(() => base ? analizarRiesgos(base, umbral) : [], [base, umbral])
+
+  // Real (banco) vs Proyectado (motor) mensual — para meses transcurridos
+  const proyMes = useMemo(() => raw ? proyectarMensual(raw, venta, feriados, anio) : {}, [raw, venta, feriados, anio])
 
   const chartData = useMemo(() => {
     if (!base) return []
@@ -209,6 +213,54 @@ export function AnalisisRiesgoTab({ anio, setAnio }) {
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Real (banco) vs Proyectado (motor) — mensual */}
+      <div style={{ background: '#fff', borderRadius: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+        <div style={{ padding: '12px 14px 6px', fontSize: 12, fontWeight: 700, color: '#374151' }}>
+          Real vs Proyectado <span style={{ fontWeight: 400, color: '#6B7280' }}>— banco vs motor, por mes (los meses futuros solo proyectados)</span>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+            <thead>
+              <tr>
+                <th style={{ ...TH }}>Mes</th>
+                <th style={{ ...TH, textAlign: 'right', color: '#15803D' }}>Ingreso real</th>
+                <th style={{ ...TH, textAlign: 'right' }}>Ing. proy.</th>
+                <th style={{ ...TH, textAlign: 'right' }}>Δ ventas</th>
+                <th style={{ ...TH, textAlign: 'right', color: '#991B1B' }}>Egreso real</th>
+                <th style={{ ...TH, textAlign: 'right' }}>Egr. proy.</th>
+                <th style={{ ...TH, textAlign: 'right' }}>Neto real</th>
+                <th style={{ ...TH, textAlign: 'right' }}>Neto proy.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {MESES_L.map((nom, i) => {
+                const m = i + 1
+                const r = raw.realMensual?.[m] || { ingreso: 0, egreso: 0 }
+                const p = proyMes[m] || { ingreso: 0, egreso: 0 }
+                const transcurrido = m < (raw.mesCorte ?? 13)
+                const dVentas = (transcurrido && p.ingreso > 0) ? ((r.ingreso - p.ingreso) / p.ingreso) * 100 : null
+                const netoR = r.ingreso - r.egreso, netoP = p.ingreso - p.egreso
+                return (
+                  <tr key={m} style={{ background: transcurrido ? 'transparent' : '#FAFAFA' }}>
+                    <td style={{ ...TD, fontWeight: 600 }}>{nom}{!transcurrido && <span style={{ fontSize: 9, color: '#9CA3AF', marginLeft: 4 }}>futuro</span>}</td>
+                    <td style={{ ...TD, textAlign: 'right', fontFamily: 'monospace', color: transcurrido ? '#15803D' : '#D1D5DB' }}>{transcurrido ? fmtCLP(r.ingreso) : '—'}</td>
+                    <td style={{ ...TD, textAlign: 'right', fontFamily: 'monospace', color: '#6B7280' }}>{fmtCLP(p.ingreso)}</td>
+                    <td style={{ ...TD, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: dVentas == null ? '#D1D5DB' : dVentas < 0 ? '#DC2626' : '#15803D' }}>{dVentas == null ? '—' : (dVentas >= 0 ? '+' : '') + dVentas.toFixed(0) + '%'}</td>
+                    <td style={{ ...TD, textAlign: 'right', fontFamily: 'monospace', color: transcurrido ? '#991B1B' : '#D1D5DB' }}>{transcurrido ? fmtCLP(r.egreso) : '—'}</td>
+                    <td style={{ ...TD, textAlign: 'right', fontFamily: 'monospace', color: '#6B7280' }}>{fmtCLP(p.egreso)}</td>
+                    <td style={{ ...TD, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: transcurrido ? (netoR < 0 ? '#DC2626' : '#15803D') : '#D1D5DB' }}>{transcurrido ? fmtCLP(netoR) : '—'}</td>
+                    <td style={{ ...TD, textAlign: 'right', fontFamily: 'monospace', color: netoP < 0 ? '#DC2626' : '#6B7280' }}>{fmtCLP(netoP)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ padding: '8px 14px', borderTop: '1px solid #F3F4F6', fontSize: 10.5, color: '#6B7280' }}>
+          "Δ ventas" = cuánto se desvió la venta real de la proyectada en meses transcurridos. Real desde la cuenta Santander (NIC 7); proyectado desde el motor de compromisos.
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 14 }}>
