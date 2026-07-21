@@ -1,0 +1,687 @@
+import { useState, useEffect, useMemo, Fragment } from 'react'
+import { supabase } from '../supabase'
+import { Download, RefreshCw } from 'lucide-react'
+import { toast } from 'sonner'
+import * as XLSX from 'xlsx'
+import { calcularKPIs, generarAlertas } from './analisis/motor'
+import { PanelKPIs } from './analisis/PanelKPIs'
+import { AlertasInteligentes } from './analisis/AlertasInteligentes'
+import { fetchRrhhValores, mergeRrhhSobreEerr } from './analisis/rrhh_source'
+import { PresupuestoGraficos } from './presupuesto/PresupuestoGraficos'
+import { PresupuestoForecast } from './presupuesto/PresupuestoForecast'
+
+/* ═══ FIN PRESUPUESTO ═══
+   Presupuesto vs Real. Cruza tabla eerr_presupuestado (metas fijadas) con
+   el cálculo real del EERR (motor duplicado abajo — intencionalmente
+   independiente del de EerrEstadoResultados.jsx para no acoplar módulos).
+   Items "huérfanos" se muestran con badge para transparencia total. */
+
+const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+const MESES_COL_PRES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+const ANIOS = [2024, 2025, 2026]
+
+const fmtCLP = n => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n || 0)
+const fmt = v => { if (!v || Math.round(v) === 0) return '—'; return fmtCLP(v) }
+const fmtPct = (real, pres) => {
+  if (!pres || pres === 0) return '—'
+  const v = ((real - pres) / Math.abs(pres)) * 100
+  return (v >= 0 ? '+' : '') + v.toFixed(1) + '%'
+}
+
+/* Semántica de desviación:
+   - Líneas de INGRESO (ventas, márgenes, resultados): real > pres = BUENO (verde)
+   - Líneas de GASTO: real > pres = MALO (rojo, te pasaste del presupuesto)  */
+const CODIGOS_DIRECCION_INGRESO = new Set([
+  'VENTA_BRUTA','VENTA_NETA','MARGEN_CONTRIB','TOTAL_MARGEN_BRUTO',
+  'RESULTADO_OPERACIONAL','RESULTADO_NETO',
+])
+const esLineaIngreso = f => f.codigo ? CODIGOS_DIRECCION_INGRESO.has(f.codigo) : (f.tipo === 'INGRESOS')
+const colorDesvio = (varV, esIngreso) => {
+  if (!varV) return '#9CA3AF'
+  const favorable = esIngreso ? varV > 0 : varV < 0
+  return favorable ? '#15803D' : '#DC2626'
+}
+
+/* ─── Mapeo item presupuesto → código EERR ───
+   Construido a partir del cruce manual validado con Juan Pablo.
+   Valor null = item presupuestado sin contraparte real (huérfano). */
+const MAP_ITEM_TO_CODIGO = {
+  'VENTA BRUTA': 'VENTA_BRUTA',
+  'VENTA NETA': 'VENTA_NETA',
+  'COSTO NETO': 'COSTO_NETO',
+  'MARGEN DE CONTRIBUCIÓN': 'MARGEN_CONTRIB',
+  'REMUNERACIÓN OPERACIÓN': 'REM_OPERACION',
+  'REMUNERACIÓN VENTA': 'REM_VENTA',
+  'MARKETING': 'MARKETING',
+  'COMISIONES POR VENTA (GETNET)': 'COMISION_GETNET',
+  'GASTOS BANCARIOS': 'GASTOS_BANCARIOS',
+  'MOBILIARIO E INFRAESTRUCTURA': 'MOBILIARIO',
+  'SERVICIOS EXTERNOS': 'SERVICIOS_EXTERNOS',
+  'ARRIENDO': 'ARRIENDO',
+  'CUENTAS BÁSICAS': 'CUENTAS_BASICAS',
+  'COMBUSTIBLE': 'COMBUSTIBLE',
+  'REMUNERACIÓN ADMINISTRATIVOS': 'REM_ADMIN',
+  'REMUNERACIÓN SOCIOS': 'REM_SOCIOS',
+  'FINIQUITOS': 'FINIQUITOS',
+  'GASTOS TI': 'GASTOS_TI',
+  'OTROS GASTOS ADMIN': 'OTROS_GASTOS_ADMIN',
+  'TRANSPORTE Y VIÁTICOS': 'TRANSPORTE_VIATICOS',
+  'ARTÍCULOS DE OFICINA': null,
+  'TOTAL GASTO OPERATIVO': 'TOTAL_GASTO_OPERATIVO',
+  'MATERIA PRIMA IMPORTACIÓN': 'MP_IMPORTACION',
+  'MATERIA PRIMA REPOSICIÓN': 'MP_REPOSICION',
+  'MATERIA PRIMA INVERSIÓN': 'MP_INVERSION',
+  'MATERIA PRIMA TRANSPORTES': 'MP_TRANSPORTES',
+  'TOTAL GASTO MATERIA PRIMA': 'TOTAL_MP',
+  'CRÉDITOS': 'INTERES_CREDITOS',
+  'RESULTADO OPERACIONAL': 'RESULTADO_OPERACIONAL',
+  'TOTAL EGRESOS': null,
+  'FLUJO ECONÓMICO': null,
+  'IMPUESTOS': 'IVA_SII',
+  'FLUJO FINANCIERO': 'RESULTADO_NETO',
+}
+
+/* Códigos EERR que NO tienen línea en presupuesto pero sí están en el cálculo real.
+   Se anexan al final con badge "sin presupuesto" para transparencia. */
+const CODIGOS_SIN_PRESUPUESTO = ['TOTAL_GASTO_OPER', 'TOTAL_MARGEN_BRUTO', 'TOTAL_GASTO_VENTA']
+
+/* Confidencialidad REM_SOCIOS: solo directorio ve la línea separada (misma regla que EERR).
+   Para el resto, se fusiona con REMUNERACIÓN ADMINISTRATIVOS en presupuesto Y en real. */
+const ROLES_VE_SOCIOS = ['admin', 'admin_sistema', 'dir_general', 'dir_negocios']
+
+/* ─── Motor de cálculo del EERR REAL ───
+   Replica la lógica de presupuesto/EerrEstadoResultados.jsx de forma autónoma.
+   Si en el futuro se modifica el motor original, este sigue funcionando.
+   Ambos leen las mismas tablas (eerr_lineas, eerr_mapeo, etc.) por lo que
+   matemáticamente convergen. */
+async function fetchReal(anio) {
+  const yStart = `${anio}-01-01`, yEnd = `${anio}-12-31`
+
+  const [lineasR, mapeoR, ventasR, movsR, comprasR, ajustesR, subcuentasR] = await Promise.all([
+    // OJO: acá NO filtramos activo=true — el Presupuesto necesita el real de las líneas MP
+    // (desactivadas del EERR contable) para comparar compras reales vs presupuestadas.
+    supabase.from('eerr_lineas').select('*').order('orden'),
+    supabase.from('eerr_mapeo').select('eerr_linea_id, cuenta_madre_id, fuente, signo'),
+    supabase.from('ventas_bsale_dia').select('fecha, total_venta').gte('fecha', yStart).lte('fecha', yEnd),
+    supabase.from('movimientos_bancarios').select('fecha, monto, subcuenta_id').gte('fecha', yStart).lte('fecha', yEnd).lt('monto', 0).not('subcuenta_id', 'is', null),
+    (async () => {
+      let r = await supabase.from('libro_compras').select('fecha_emision, monto_neto, subcuenta_id, estado').gte('fecha_emision', yStart).lte('fecha_emision', yEnd).not('subcuenta_id', 'is', null).neq('estado', 'anulado')
+      if (r.error && /column .* does not exist/i.test(r.error.message)) {
+        r = await supabase.from('libro_compras').select('fecha_emision, monto_neto, subcuenta_id').gte('fecha_emision', yStart).lte('fecha_emision', yEnd).not('subcuenta_id', 'is', null)
+      }
+      if (r.error) return { data: [], error: null }
+      return r
+    })(),
+    supabase.from('eerr_ajustes_manuales').select('eerr_linea_id, mes, monto').eq('anio', anio).is('sucursal_id', null),
+    supabase.from('subcuentas').select('id, cuenta_madre_id'),
+  ])
+
+  if (lineasR.error) throw new Error('eerr_lineas: ' + lineasR.error.message)
+  if (mapeoR.error) throw new Error('eerr_mapeo: ' + mapeoR.error.message)
+  if (ventasR.error) throw new Error('ventas_bsale_dia: ' + ventasR.error.message)
+  if (movsR.error) throw new Error('movimientos_bancarios: ' + movsR.error.message)
+  if (ajustesR.error) throw new Error('eerr_ajustes_manuales: ' + ajustesR.error.message)
+
+  const subToMadre = new Map()
+  ;(subcuentasR.data ?? []).forEach(s => { if (s?.id && s?.cuenta_madre_id) subToMadre.set(s.id, s.cuenta_madre_id) })
+
+  const ventasPorMes = new Array(12).fill(0)
+  ;(ventasR.data ?? []).forEach(v => { const m = new Date(v.fecha).getUTCMonth(); ventasPorMes[m] += Number(v.total_venta ?? 0) })
+
+  const gastosPorCuentaMes = new Map()
+  ;(movsR.data ?? []).forEach(r => {
+    const cm = r.subcuenta_id ? subToMadre.get(r.subcuenta_id) : null
+    if (!cm) return
+    const m = new Date(r.fecha).getUTCMonth()
+    if (!gastosPorCuentaMes.has(cm)) gastosPorCuentaMes.set(cm, new Array(12).fill(0))
+    gastosPorCuentaMes.get(cm)[m] += Math.abs(Number(r.monto ?? 0))
+  })
+
+  const comprasPorCuentaMes = new Map()
+  ;(comprasR.data ?? []).forEach(r => {
+    const cm = r.subcuenta_id ? subToMadre.get(r.subcuenta_id) : null
+    if (!cm) return
+    const m = new Date(r.fecha_emision).getUTCMonth()
+    if (!comprasPorCuentaMes.has(cm)) comprasPorCuentaMes.set(cm, new Array(12).fill(0))
+    comprasPorCuentaMes.get(cm)[m] += Number(r.monto_neto ?? 0)
+  })
+
+  const lineas = lineasR.data ?? []
+  const getnetId = lineas.find(l => l.codigo === 'COMISION_GETNET')?.id
+  const costoNetoId = lineas.find(l => l.codigo === 'COSTO_NETO')?.id
+  const ajustesGetnet = new Array(12).fill(0)
+  const ajustesCostoNeto = new Array(12).fill(0)
+  const ajustesCostoNetoCargado = new Array(12).fill(false)
+  ;(ajustesR.data ?? []).forEach(a => {
+    if (a.eerr_linea_id === getnetId && a.mes >= 1 && a.mes <= 12) {
+      ajustesGetnet[a.mes - 1] = Number(a.monto ?? 0)
+    }
+    if (a.eerr_linea_id === costoNetoId && a.mes >= 1 && a.mes <= 12) {
+      ajustesCostoNeto[a.mes - 1] = Number(a.monto ?? 0)
+      ajustesCostoNetoCargado[a.mes - 1] = true
+    }
+  })
+
+  // Calcular valores reales por código
+  const vals = new Map()
+  const ORDEN_CODIGOS = [
+    'VENTA_BRUTA','VENTA_NETA','COSTO_NETO','MARGEN_CONTRIB',
+    'REM_OPERACION','TOTAL_GASTO_OPER','TOTAL_MARGEN_BRUTO',
+    'REM_VENTA','MARKETING','COMISION_GETNET','TOTAL_GASTO_VENTA',
+    'GASTOS_BANCARIOS','MOBILIARIO','SERVICIOS_EXTERNOS','ARRIENDO','CUENTAS_BASICAS',
+    'COMBUSTIBLE','REM_ADMIN','REM_SOCIOS','FINIQUITOS','GASTOS_TI','OTROS_GASTOS_ADMIN',
+    'TRANSPORTE_VIATICOS','REM_PREVIRED',
+    'TOTAL_GASTO_OPERATIVO','RESULTADO_OPERACIONAL',
+    'INTERES_CREDITOS','RESULTADO_NETO','IVA_SII',
+    'MP_IMPORTACION','MP_REPOSICION','MP_INVERSION','MP_TRANSPORTES','TOTAL_MP',
+  ]
+  ORDEN_CODIGOS.forEach(c => vals.set(c, new Array(12).fill(0)))
+
+  const lineasPorId = new Map()
+  lineas.forEach(l => lineasPorId.set(l.id, l))
+
+  ;(mapeoR.data ?? []).forEach(mp => {
+    const linea = lineasPorId.get(mp.eerr_linea_id)
+    if (!linea) return
+    const arr = vals.get(linea.codigo)
+    if (!arr) return
+    const signo = Number(mp.signo ?? 1)
+    const fuente = (mp.fuente ?? '').toLowerCase()
+    if (fuente === 'compras' || fuente === 'libro_compras') {
+      const v = comprasPorCuentaMes.get(mp.cuenta_madre_id)
+      if (v) for (let i = 0; i < 12; i++) arr[i] += v[i] * signo
+    } else {
+      const v = gastosPorCuentaMes.get(mp.cuenta_madre_id)
+      if (v) for (let i = 0; i < 12; i++) arr[i] += v[i] * signo
+    }
+  })
+
+  const vb = vals.get('VENTA_BRUTA')
+  for (let i = 0; i < 12; i++) vb[i] = ventasPorMes[i]
+  const getnet = vals.get('COMISION_GETNET')
+  for (let i = 0; i < 12; i++) getnet[i] = ajustesGetnet[i]
+
+  // COSTO_NETO: ajuste manual sobreescribe (igual mecanismo que EERR).
+  // Sin cargar manualmente queda en 0 (libro_compras no tiene mapeo subcuenta a EERR).
+  const costoNeto = vals.get('COSTO_NETO')
+  for (let i = 0; i < 12; i++) {
+    if (ajustesCostoNetoCargado[i]) costoNeto[i] = ajustesCostoNeto[i]
+  }
+
+  const get = c => vals.get(c)
+  const sumCodes = (codes, i) => codes.reduce((acc, c) => acc + (get(c)?.[i] ?? 0), 0)
+
+  for (let i = 0; i < 12; i++) {
+    get('VENTA_NETA')[i] = get('VENTA_BRUTA')[i] / 1.19
+    get('MARGEN_CONTRIB')[i] = get('VENTA_NETA')[i] - get('COSTO_NETO')[i]
+    get('TOTAL_GASTO_OPER')[i] = get('REM_OPERACION')[i]
+    get('TOTAL_MARGEN_BRUTO')[i] = get('MARGEN_CONTRIB')[i] - get('TOTAL_GASTO_OPER')[i]
+    get('TOTAL_GASTO_VENTA')[i] = get('REM_VENTA')[i] + get('MARKETING')[i] + get('COMISION_GETNET')[i]
+    get('TOTAL_GASTO_OPERATIVO')[i] = sumCodes(['GASTOS_BANCARIOS','MOBILIARIO','SERVICIOS_EXTERNOS','ARRIENDO','CUENTAS_BASICAS','COMBUSTIBLE','REM_ADMIN','REM_SOCIOS','FINIQUITOS','GASTOS_TI','OTROS_GASTOS_ADMIN','TRANSPORTE_VIATICOS','REM_PREVIRED'], i)
+    get('RESULTADO_OPERACIONAL')[i] = get('TOTAL_MARGEN_BRUTO')[i] - get('TOTAL_GASTO_VENTA')[i] - get('TOTAL_GASTO_OPERATIVO')[i]
+    // Resultado neto contable (igual que el EERR): sin IVA ni compras MP
+    get('RESULTADO_NETO')[i] = get('RESULTADO_OPERACIONAL')[i] - get('INTERES_CREDITOS')[i]
+    // TOTAL_MP se mantiene SOLO como control de compras vs presupuesto (no es gasto EERR)
+    get('TOTAL_MP')[i] = sumCodes(['MP_IMPORTACION','MP_REPOSICION','MP_INVERSION','MP_TRANSPORTES'], i)
+  }
+
+  return { valores: vals, lineas, lineasPorCodigo: new Map(lineas.map(l => [l.codigo, l])) }
+}
+
+async function fetchPresupuesto(anio) {
+  const { data, error } = await supabase
+    .from('eerr_presupuestado')
+    .select('*')
+    .eq('anio', anio)
+    .order('orden')
+  if (error) throw new Error('eerr_presupuestado: ' + error.message)
+  return data ?? []
+}
+
+export function FinPresupuesto({ cu, isMobile }) {
+  const [anio, setAnio] = useState(2026)
+  const [presupuesto, setPresupuesto] = useState([])
+  const [realData, setRealData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
+  const [mesHasta, setMesHasta] = useState(new Date().getMonth() + 1) // 1..12
+  const [subTab, setSubTab] = useState('comparador') // comparador | graficos | forecast
+  const [vistaTabla, setVistaTabla] = useState('acumulado') // acumulado | mes | anual
+  const [mesSel, setMesSel] = useState(new Date().getMonth() + 1) // para vista 'mes'
+
+  const veSocios = !!cu?.rol && ROLES_VE_SOCIOS.includes(cu.rol)
+
+  useEffect(() => {
+    setLoading(true); setError(null)
+    Promise.all([fetchPresupuesto(anio), fetchReal(anio), fetchRrhhValores(anio)])
+      .then(([p, r, rrhh]) => {
+        // Mergear RRHH sobre las 4 líneas REM_* del EERR (regla de oro: sin tocar el EERR original)
+        // El motor de cálculo de fetchReal ya devolvió valores con banco; los sobrescribimos acá.
+        mergeRrhhSobreEerr(r.valores, rrhh.valoresRrhh)
+        // Confidencialidad: roles fuera del directorio ven REM_SOCIOS fusionada en REM_ADMIN
+        if (!(cu?.rol && ROLES_VE_SOCIOS.includes(cu.rol))) {
+          const admin = r.valores.get('REM_ADMIN') ?? new Array(12).fill(0)
+          const socios = r.valores.get('REM_SOCIOS') ?? new Array(12).fill(0)
+          r.valores.set('REM_ADMIN', admin.map((v, i) => v + (socios[i] || 0)))
+          r.valores.set('REM_SOCIOS', new Array(12).fill(0))
+        }
+        setPresupuesto(p); setRealData(r); setLoading(false)
+      })
+      .catch(e => { setError(e.message); setLoading(false) })
+  }, [anio, reloadKey])
+
+  /* Construir filas combinadas: 33 del presupuesto + 4 huérfanos del EERR */
+  const filas = useMemo(() => {
+    if (!realData) return []
+    const presPorItem = new Map(presupuesto.map(p => [p.item, p]))
+    const out = []
+
+    // Confidencialidad: extraer presupuesto de socios para fusionarlo en administrativos
+    let presSociosArr = null
+    if (!veSocios) {
+      const pSocios = presupuesto.find(p => p.item === 'REMUNERACIÓN SOCIOS')
+      if (pSocios) presSociosArr = MESES_COL_PRES.map(c => Number(pSocios[c] ?? 0))
+    }
+
+    presupuesto.forEach(p => {
+      if (!veSocios && p.item === 'REMUNERACIÓN SOCIOS') return  // fila oculta, ya fusionada
+      const codigo = MAP_ITEM_TO_CODIGO[p.item]
+      let pres = MESES_COL_PRES.map(c => Number(p[c] ?? 0))
+      let itemNombre = p.item
+      if (!veSocios && p.item === 'REMUNERACIÓN ADMINISTRATIVOS') {
+        if (presSociosArr) pres = pres.map((v, i) => v + presSociosArr[i])
+        itemNombre = 'REMUNERACIÓN ADMINISTRACIÓN Y DIRECCIÓN'
+      }
+      const real = codigo ? (realData.valores.get(codigo) ?? new Array(12).fill(0)) : new Array(12).fill(0)
+      out.push({
+        item: itemNombre,
+        codigo,
+        tipo: p.tipo,
+        esSubtotal: !!p.es_subtotal,
+        sinReal: codigo === null,
+        sinPresupuesto: false,
+        pres, real,
+      })
+    })
+
+    // Anexar códigos EERR que no tienen presupuesto
+    CODIGOS_SIN_PRESUPUESTO.forEach(codigo => {
+      const linea = realData.lineasPorCodigo.get(codigo)
+      if (!linea) return
+      const real = realData.valores.get(codigo) ?? new Array(12).fill(0)
+      out.push({
+        item: linea.nombre,
+        codigo,
+        tipo: 'EGRESOS',
+        esSubtotal: codigo.startsWith('TOTAL_'),
+        sinReal: false,
+        sinPresupuesto: true,
+        pres: new Array(12).fill(0),
+        real,
+      })
+    })
+    return out
+  }, [presupuesto, realData, veSocios])
+
+  /* ─── KPIs y alertas (Fase 2: motor inteligente) ─── */
+  const valoresPrev = useMemo(() => {
+    if (!realData || mesHasta <= 1) return null
+    const clon = new Map()
+    realData.valores.forEach((arr, k) => {
+      const copia = new Array(12).fill(0)
+      for (let i = 0; i < mesHasta - 1; i++) copia[i] = arr[i] || 0
+      clon.set(k, copia)
+    })
+    return clon
+  }, [realData, mesHasta])
+
+  const kpisCompactos = useMemo(() => {
+    if (!realData) return []
+    // Solo los 4 más importantes para mostrar arriba (compacto)
+    const all = calcularKPIs({ valores: realData.valores, mesHasta, dotacionMes: null })
+    return all.filter(k => ['margen_bruto', 'margen_op', 'costo_venta', 'rem_total'].includes(k.id))
+  }, [realData, mesHasta])
+
+  const alertasTop = useMemo(() => {
+    if (!realData) return []
+    return generarAlertas({
+      valores: realData.valores,
+      valoresPrev,
+      presupuesto: filas.filter(f => f.codigo),  // solo las con codigo
+      mesHasta,
+      lineasPorCodigo: realData.lineasPorCodigo,
+    })
+  }, [realData, valoresPrev, filas, mesHasta])
+
+  function exportarExcel() {
+    if (!filas.length) return
+    const headers = ['Línea', 'Tipo']
+    MESES.forEach(m => { headers.push(`${m} Pres`, `${m} Real`, `${m} Var`, `${m} %`) })
+    headers.push('Total Pres', 'Total Real', 'Total Var', 'Total %')
+    const rows = [headers]
+    filas.forEach(f => {
+      const r = [f.item, f.tipo]
+      let tp = 0, tr = 0
+      for (let i = 0; i < 12; i++) {
+        const dentro = (i + 1) <= mesHasta
+        const realV = dentro ? f.real[i] : 0
+        const presV = f.pres[i]
+        tp += presV; tr += realV
+        r.push(Math.round(presV), Math.round(realV), Math.round(realV - presV), presV ? (((realV - presV) / Math.abs(presV)) * 100).toFixed(1) + '%' : '—')
+      }
+      r.push(Math.round(tp), Math.round(tr), Math.round(tr - tp), tp ? (((tr - tp) / Math.abs(tp)) * 100).toFixed(1) + '%' : '—')
+      rows.push(r)
+    })
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), `Pres vs Real ${anio}`)
+    XLSX.writeFile(wb, `Presupuesto_vs_Real_${anio}.xlsx`)
+    toast.success('Excel exportado')
+  }
+
+  const TH = { padding: '8px 8px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6B7280', background: '#F9FAFB', whiteSpace: 'nowrap' }
+  const selectSt = { padding: '6px 10px', borderRadius: 7, border: '1px solid #D1D5DB', fontSize: 12, background: '#fff' }
+  const btnSt = { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 7, border: '1px solid #D1D5DB', background: '#fff', fontSize: 12, cursor: 'pointer', color: '#374151' }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Controles */}
+      <div style={{ background: '#fff', borderRadius: 10, padding: '12px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 12 }}>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: 4 }}>Año</label>
+          <select style={selectSt} value={String(anio)} onChange={e => setAnio(Number(e.target.value))}>
+            {ANIOS.map(a => <option key={a} value={String(a)}>{a}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: 4 }}>Real hasta mes</label>
+          <select style={selectSt} value={String(mesHasta)} onChange={e => setMesHasta(Number(e.target.value))}>
+            {MESES.map((m, i) => <option key={m} value={String(i + 1)}>{m}</option>)}
+          </select>
+        </div>
+        <div style={{ fontSize: 11, color: '#6B7280', maxWidth: 320, lineHeight: 1.4, paddingBottom: 4 }}>
+          Solo los meses ≤ <b>{MESES[mesHasta - 1]}</b> incluyen real. Meses futuros muestran solo presupuesto.
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <button onClick={exportarExcel} disabled={!filas.length} style={{ ...btnSt, opacity: !filas.length ? 0.5 : 1 }}>
+            <Download size={13} /> Exportar Excel
+          </button>
+          <button onClick={() => setReloadKey(k => k + 1)} disabled={loading} style={btnSt}>
+            <RefreshCw size={13} /> Recalcular
+          </button>
+        </div>
+      </div>
+
+      {/* Nota metodológica */}
+      <div style={{
+        borderRadius: 8, border: '1px solid #BFDBFE', background: '#EFF6FF',
+        padding: '10px 14px', fontSize: 12, color: '#1E40AF',
+        display: 'flex', alignItems: 'flex-start', gap: 10
+      }}>
+        <span style={{ fontSize: 16, lineHeight: 1 }}>ℹ️</span>
+        <div style={{ flex: 1, lineHeight: 1.5 }}>
+          <b>Remuneraciones:</b> las 4 líneas REM_* usan el costo empresa real devengado desde RRHH (haberes + aportes patronales prorrateados), no lo pagado por banco. <b>Materia Prima:</b> las líneas MP son control de compras vs presupuesto — no son gasto del EERR contable (el resultado no las descuenta).
+        </div>
+      </div>
+
+      {error && <div style={{ borderRadius: 8, border: '1px solid #FECACA', background: '#FEF2F2', padding: '10px 14px', fontSize: 13, color: '#DC2626' }}>Error: {error}</div>}
+
+      {/* Sub-tabs */}
+      <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+        {[
+          { k: 'comparador', l: 'Comparador Pres vs Real' },
+          { k: 'graficos',   l: 'Gráficos' },
+          { k: 'forecast',   l: 'Forecast' },
+        ].map(t => (
+          <button key={t.k} onClick={() => setSubTab(t.k)} style={{
+            padding: '9px 16px', fontSize: 13, fontWeight: 600,
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: subTab === t.k ? '#1F4E79' : '#8E8E93',
+            borderBottom: subTab === t.k ? '2px solid #1F4E79' : '2px solid transparent',
+          }}>{t.l}</button>
+        ))}
+      </div>
+
+      {/* KPIs compactos + alertas top 3 (Fase 2) — solo en comparador */}
+      {!loading && realData && subTab === 'comparador' && (
+        <>
+          <PanelKPIs kpis={kpisCompactos} compacto />
+          {alertasTop.length > 0 && <AlertasInteligentes alertas={alertasTop} titulo="Hallazgos principales" maxItems={3} />}
+        </>
+      )}
+
+      {loading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {Array.from({ length: 12 }).map((_, i) => <div key={i} style={{ height: 32, background: '#F3F4F6', borderRadius: 6 }} />)}
+        </div>
+      )}
+
+      {!loading && !error && filas.length === 0 && (
+        <div style={{ background: '#fff', borderRadius: 10, padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>
+          Sin datos para {anio}. Carga presupuesto en eerr_presupuestado para ver comparación.
+        </div>
+      )}
+
+      {!loading && filas.length > 0 && subTab === 'graficos' && (
+        <PresupuestoGraficos filas={filas} mesHasta={mesHasta} />
+      )}
+
+      {!loading && filas.length > 0 && subTab === 'forecast' && (
+        <PresupuestoForecast filas={filas} mesHasta={mesHasta} anio={anio} />
+      )}
+
+      {!loading && filas.length > 0 && subTab === 'comparador' && (
+        <div style={{ background: '#fff', borderRadius: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+          {/* Selector de vista de tabla */}
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 0, border: '1px solid #D1D5DB', borderRadius: 7, overflow: 'hidden' }}>
+              {[['acumulado', `Acumulado a ${MESES[mesHasta - 1]}`], ['mes', 'Un mes'], ['anual', 'Año completo']].map(([k, l]) => (
+                <button key={k} onClick={() => setVistaTabla(k)}
+                  style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer', background: vistaTabla === k ? '#1F4E79' : '#fff', color: vistaTabla === k ? '#fff' : '#6B7280' }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            {vistaTabla === 'mes' && (
+              <select style={selectSt} value={String(mesSel)} onChange={e => setMesSel(Number(e.target.value))}>
+                {MESES.map((m, i) => <option key={m} value={String(i + 1)}>{m}</option>)}
+              </select>
+            )}
+            <span style={{ fontSize: 11, color: '#9CA3AF' }}>
+              {vistaTabla === 'acumulado' && 'Vista ejecutiva: totales acumulados del año a la fecha, con barra de cumplimiento.'}
+              {vistaTabla === 'mes' && 'Detalle de un mes específico.'}
+              {vistaTabla === 'anual' && 'Los 12 meses en detalle (tabla ancha, scroll horizontal).'}
+            </span>
+          </div>
+
+          {/* ═══ VISTA ACUMULADO (ejecutiva) ═══ */}
+          {vistaTabla === 'acumulado' && (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
+                    <th style={{ ...TH, minWidth: 220 }}>Línea</th>
+                    <th style={{ ...TH, textAlign: 'right', minWidth: 110 }}>Presupuesto YTD</th>
+                    <th style={{ ...TH, textAlign: 'right', minWidth: 110 }}>Real YTD</th>
+                    <th style={{ ...TH, textAlign: 'right', minWidth: 100 }}>Desvío</th>
+                    <th style={{ ...TH, textAlign: 'right', minWidth: 66 }}>Cumpl. %</th>
+                    <th style={{ ...TH, minWidth: 130 }}>Avance</th>
+                    <th style={{ ...TH, textAlign: 'right', minWidth: 110, borderLeft: '2px solid #E5E7EB' }}>Presup. año</th>
+                    <th style={{ ...TH, textAlign: 'right', minWidth: 70 }}>% del año</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filas.map((f, idx) => {
+                    let presYtd = 0, realYtd = 0, presAnual = 0
+                    for (let i = 0; i < 12; i++) {
+                      presAnual += f.pres[i]
+                      if ((i + 1) <= mesHasta) { presYtd += f.pres[i]; realYtd += f.real[i] }
+                    }
+                    const varV = realYtd - presYtd
+                    const esIngreso = esLineaIngreso(f)
+                    const cumpl = presYtd !== 0 ? (realYtd / Math.abs(presYtd)) * 100 : null
+                    const avanceAnual = presAnual !== 0 ? (realYtd / Math.abs(presAnual)) * 100 : null
+                    const cDesvio = colorDesvio(varV, esIngreso)
+                    // Barra: hasta 100% gris azulado; el exceso se pinta según semántica
+                    const barPct = cumpl === null ? 0 : Math.min(cumpl, 150)
+                    const barColor = cumpl === null ? '#E5E7EB'
+                      : esIngreso ? (cumpl >= 100 ? '#15803D' : cumpl >= 85 ? '#0891B2' : '#DC2626')
+                      : (cumpl <= 100 ? '#0891B2' : cumpl <= 115 ? '#B45309' : '#DC2626')
+                    const rowBg = f.esSubtotal ? '#FAFAFA' : 'transparent'
+                    return (
+                      <tr key={idx} style={{ borderBottom: '1px solid #F3F4F6', background: rowBg }}>
+                        <td style={{ padding: '7px 10px', fontWeight: f.esSubtotal ? 700 : 400, color: '#111827', whiteSpace: 'nowrap' }}>
+                          {f.item}
+                          {f.sinReal && <span style={{ marginLeft: 6, fontSize: 9, background: '#FEF3C7', color: '#92400E', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>SIN REAL</span>}
+                          {f.sinPresupuesto && <span style={{ marginLeft: 6, fontSize: 9, background: '#DBEAFE', color: '#1E40AF', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>SIN PRESUP.</span>}
+                        </td>
+                        <td style={{ padding: '7px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#6B7280' }}>{fmt(presYtd)}</td>
+                        <td style={{ padding: '7px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#111827' }}>{fmt(realYtd)}</td>
+                        <td style={{ padding: '7px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: cDesvio }}>
+                          {(presYtd || realYtd) ? (varV >= 0 ? '+' : '') + fmt(varV) : '—'}
+                        </td>
+                        <td style={{ padding: '7px 8px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: barColor }}>
+                          {cumpl !== null ? cumpl.toFixed(0) + '%' : '—'}
+                        </td>
+                        <td style={{ padding: '7px 10px' }}>
+                          {cumpl !== null && (
+                            <div style={{ position: 'relative', height: 10, background: '#F1F5F9', borderRadius: 5, overflow: 'hidden', minWidth: 110 }}>
+                              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${(barPct / 150) * 100}%`, background: barColor, borderRadius: 5, opacity: 0.85 }} />
+                              <div style={{ position: 'absolute', left: `${(100 / 150) * 100}%`, top: 0, bottom: 0, width: 1.5, background: '#64748B' }} title="Meta 100%" />
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ padding: '7px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#9CA3AF', borderLeft: '2px solid #F3F4F6' }}>{fmt(presAnual)}</td>
+                        <td style={{ padding: '7px 8px', textAlign: 'right', fontFamily: 'monospace', fontSize: 11, color: '#6B7280' }}>
+                          {avanceAnual !== null ? avanceAnual.toFixed(0) + '%' : '—'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ═══ VISTA UN MES ═══ */}
+          {vistaTabla === 'mes' && (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
+                    <th style={{ ...TH, minWidth: 220 }}>Línea</th>
+                    <th style={{ ...TH, textAlign: 'right', minWidth: 110 }}>Presupuesto {MESES[mesSel - 1]}</th>
+                    <th style={{ ...TH, textAlign: 'right', minWidth: 110 }}>Real {MESES[mesSel - 1]}</th>
+                    <th style={{ ...TH, textAlign: 'right', minWidth: 100 }}>Desvío</th>
+                    <th style={{ ...TH, textAlign: 'right', minWidth: 66 }}>Cumpl. %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filas.map((f, idx) => {
+                    const i = mesSel - 1
+                    const dentro = mesSel <= mesHasta
+                    const p = f.pres[i], r = dentro ? f.real[i] : 0
+                    const varV = r - p
+                    const esIngreso = esLineaIngreso(f)
+                    const cumpl = p !== 0 && dentro ? (r / Math.abs(p)) * 100 : null
+                    const cDesvio = colorDesvio(varV, esIngreso)
+                    const rowBg = f.esSubtotal ? '#FAFAFA' : 'transparent'
+                    return (
+                      <tr key={idx} style={{ borderBottom: '1px solid #F3F4F6', background: rowBg }}>
+                        <td style={{ padding: '7px 10px', fontWeight: f.esSubtotal ? 700 : 400, color: '#111827', whiteSpace: 'nowrap' }}>{f.item}</td>
+                        <td style={{ padding: '7px 10px', textAlign: 'right', fontFamily: 'monospace', color: '#6B7280' }}>{fmt(p)}</td>
+                        <td style={{ padding: '7px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: dentro ? '#111827' : '#D1D5DB' }}>{dentro ? fmt(r) : '— (futuro)'}</td>
+                        <td style={{ padding: '7px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: dentro ? cDesvio : '#D1D5DB' }}>{dentro && (p || r) ? (varV >= 0 ? '+' : '') + fmt(varV) : '—'}</td>
+                        <td style={{ padding: '7px 8px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: dentro ? cDesvio : '#D1D5DB' }}>{cumpl !== null ? cumpl.toFixed(0) + '%' : '—'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ═══ VISTA AÑO COMPLETO (detalle 12 meses) ═══ */}
+          {vistaTabla === 'anual' && (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
+                  <th rowSpan={2} style={{ ...TH, position: 'sticky', left: 0, zIndex: 2, minWidth: 220, background: '#F9FAFB' }}>Línea</th>
+                  {MESES.map((m, i) => {
+                    const futuro = (i + 1) > mesHasta
+                    return (
+                      <th key={m} colSpan={4} style={{ ...TH, textAlign: 'center', minWidth: 360, background: futuro ? '#FAFAFA' : '#F0F9FF', borderLeft: '1px solid #E5E7EB', color: futuro ? '#9CA3AF' : '#1F4E79' }}>
+                        {m}{futuro && ' (futuro)'}
+                      </th>
+                    )
+                  })}
+                  <th colSpan={4} style={{ ...TH, textAlign: 'center', background: '#FEF3C7', borderLeft: '1px solid #E5E7EB', color: '#92400E' }}>TOTAL AÑO</th>
+                </tr>
+                <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
+                  {MESES.map((m, i) => (
+                    <Fragment key={m}>
+                      <th style={{ ...TH, textAlign: 'right', minWidth: 80, fontSize: 10, borderLeft: '1px solid #E5E7EB' }}>Pres</th>
+                      <th style={{ ...TH, textAlign: 'right', minWidth: 80, fontSize: 10 }}>Real</th>
+                      <th style={{ ...TH, textAlign: 'right', minWidth: 80, fontSize: 10 }}>Var</th>
+                      <th style={{ ...TH, textAlign: 'right', minWidth: 60, fontSize: 10 }}>%</th>
+                    </Fragment>
+                  ))}
+                  <th style={{ ...TH, textAlign: 'right', minWidth: 90, fontSize: 10, borderLeft: '1px solid #E5E7EB' }}>Pres</th>
+                  <th style={{ ...TH, textAlign: 'right', minWidth: 90, fontSize: 10 }}>Real</th>
+                  <th style={{ ...TH, textAlign: 'right', minWidth: 90, fontSize: 10 }}>Var</th>
+                  <th style={{ ...TH, textAlign: 'right', minWidth: 60, fontSize: 10 }}>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filas.map((f, idx) => {
+                  let totalPres = 0, totalReal = 0
+                  for (let i = 0; i < 12; i++) {
+                    totalPres += f.pres[i]
+                    if ((i + 1) <= mesHasta) totalReal += f.real[i]
+                  }
+                  const esIngreso = esLineaIngreso(f)
+                  const rowBg = f.esSubtotal ? '#FAFAFA' : 'transparent'
+                  return (
+                    <tr key={idx} style={{ borderBottom: '1px solid #F3F4F6', background: rowBg }}>
+                      <td style={{ padding: '7px 10px', fontWeight: f.esSubtotal ? 700 : 400, color: '#111827', position: 'sticky', left: 0, background: rowBg === 'transparent' ? '#fff' : rowBg, zIndex: 1, minWidth: 220, boxShadow: '2px 0 4px -2px rgba(0,0,0,0.08)' }}>
+                        {f.item}
+                        {f.sinReal && <span style={{ marginLeft: 6, fontSize: 9, background: '#FEF3C7', color: '#92400E', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>SIN REAL</span>}
+                        {f.sinPresupuesto && <span style={{ marginLeft: 6, fontSize: 9, background: '#DBEAFE', color: '#1E40AF', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>SIN PRESUP.</span>}
+                      </td>
+                      {f.pres.map((p, i) => {
+                        const dentro = (i + 1) <= mesHasta
+                        const realV = dentro ? f.real[i] : 0
+                        const varV = realV - p
+                        return (
+                          <Fragment key={i}>
+                            <td style={{ padding: '6px 6px', textAlign: 'right', fontFamily: 'monospace', fontSize: 11, color: '#6B7280', borderLeft: '1px solid #F3F4F6' }}>{fmt(p)}</td>
+                            <td style={{ padding: '6px 6px', textAlign: 'right', fontFamily: 'monospace', fontSize: 11, color: dentro ? '#111827' : '#D1D5DB', fontWeight: dentro ? 500 : 400 }}>{dentro ? fmt(realV) : '—'}</td>
+                            <td style={{ padding: '6px 6px', textAlign: 'right', fontFamily: 'monospace', fontSize: 11, color: dentro && (p || realV) ? colorDesvio(varV, esIngreso) : '#D1D5DB' }}>{dentro && (p || realV) ? fmt(varV) : '—'}</td>
+                            <td style={{ padding: '6px 4px', textAlign: 'right', fontFamily: 'monospace', fontSize: 10, color: dentro ? '#6B7280' : '#D1D5DB' }}>{dentro ? fmtPct(realV, p) : '—'}</td>
+                          </Fragment>
+                        )
+                      })}
+                      <td style={{ padding: '7px 8px', textAlign: 'right', fontFamily: 'monospace', fontSize: 12, fontWeight: 600, color: '#6B7280', background: '#FEF3C7', borderLeft: '1px solid #E5E7EB' }}>{fmt(totalPres)}</td>
+                      <td style={{ padding: '7px 8px', textAlign: 'right', fontFamily: 'monospace', fontSize: 12, fontWeight: 600, color: '#111827', background: '#FEF3C7' }}>{fmt(totalReal)}</td>
+                      <td style={{ padding: '7px 8px', textAlign: 'right', fontFamily: 'monospace', fontSize: 12, fontWeight: 600, color: colorDesvio(totalReal - totalPres, esIngreso), background: '#FEF3C7' }}>{fmt(totalReal - totalPres)}</td>
+                      <td style={{ padding: '7px 6px', textAlign: 'right', fontFamily: 'monospace', fontSize: 11, color: '#6B7280', background: '#FEF3C7' }}>{fmtPct(totalReal, totalPres)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          )}
+
+          <div style={{ padding: '10px 16px', borderTop: '1px solid #F3F4F6', fontSize: 11, color: '#6B7280', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            <span><span style={{ background: '#FEF3C7', color: '#92400E', padding: '1px 5px', borderRadius: 3, fontWeight: 600, fontSize: 9 }}>SIN REAL</span> Línea presupuestada sin contraparte en EERR real.</span>
+            <span><span style={{ background: '#DBEAFE', color: '#1E40AF', padding: '1px 5px', borderRadius: 3, fontWeight: 600, fontSize: 9 }}>SIN PRESUP.</span> Línea EERR real sin meta presupuestada.</span>
+            <span style={{ color: '#15803D' }}>● Desvío favorable (ingreso sobre meta / gasto bajo meta)</span>
+            <span style={{ color: '#DC2626' }}>● Desvío desfavorable (ingreso bajo meta / gasto sobre meta)</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
