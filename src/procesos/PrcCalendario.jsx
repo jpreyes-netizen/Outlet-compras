@@ -19,6 +19,7 @@ const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
 const EST_SESION = {
   PLANIFICADA: { l: 'Planificada', c: 'var(--info)', bg: 'var(--info-bg)' },
   REALIZADA: { l: 'Realizada', c: 'var(--success)', bg: 'var(--success-bg)' },
+  SIN_QUORUM: { l: 'Sin quórum', c: 'var(--warning)', bg: 'var(--warning-bg)' },
   ANULADA: { l: 'Anulada', c: 'var(--text-muted)', bg: 'var(--bg-page)' }
 }
 const EST_ASIST = {
@@ -43,7 +44,7 @@ const sumarDias = (fecha, n) => {
   return t.toISOString().slice(0, 10)
 }
 
-export function PrcCalendario({ matriz, cat, cu, onAbrir, toast }) {
+export function PrcCalendario({ matriz, cat, cu, onAbrir, toast, onAbrirSesion }) {
   const editable = puedeEditar(cu)
   const [ses, setSes] = useState([])
   const [asis, setAsis] = useState([])
@@ -351,7 +352,14 @@ export function PrcCalendario({ matriz, cat, cu, onAbrir, toast }) {
             <div style={{ flex: 1, minWidth: 260 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 16, fontWeight: 700 }}>{sel.comite_nombre}</span>
+                {sel.numero != null && <Bd c="var(--accent)">Sesión N° {sel.numero}</Bd>}
                 <Bd c={EST_SESION[sel.estado]?.c}>{EST_SESION[sel.estado]?.l}</Bd>
+                {sel.n_votantes > 0 && (
+                  <Bd c={sel.quorum_ok ? 'var(--success)' : 'var(--warning)'} title="Votantes presentes sobre convocados con voto (regla ¾, mínimo 3)">
+                    quórum {sel.n_votantes_presentes}/{sel.n_votantes} {sel.quorum_ok ? '✓' : '✗'}
+                  </Bd>
+                )}
+                {sel.acta_estado && sel.acta_estado !== 'SIN_ACTA' && <Bd c={sel.acta_estado === 'APROBADA' ? 'var(--success)' : 'var(--info)'}>acta {sel.acta_estado.toLowerCase()}</Bd>}
                 {sel.sin_acuerdos && <Bd c="var(--danger)">sin acuerdos registrados</Bd>}
               </div>
               <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 4 }}>
@@ -363,6 +371,11 @@ export function PrcCalendario({ matriz, cat, cu, onAbrir, toast }) {
               {sel.observaciones && <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 4 }}>{sel.observaciones}</div>}
             </div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              {onAbrirSesion && (
+                <Bt sm onClick={() => onAbrirSesion(sel.id)} title="Conducir la sesión: orden del día, quórum, scorecard, decisiones, acuerdos y acta">
+                  🏛️ Abrir sala de sesión
+                </Bt>
+              )}
               {editable && (
                 <select value={sel.estado} onChange={e => cambiarEstadoSesion(sel, e.target.value)}
                   title="Estado de la sesión" style={{ ...css.select, fontSize: 12 }}>
@@ -431,7 +444,7 @@ export function PrcCalendario({ matriz, cat, cu, onAbrir, toast }) {
                 <Bd c={acuSel.length ? 'var(--accent)' : 'var(--danger)'}>{acuSel.length}</Bd>
               </div>
               {acuSel.length === 0 && (
-                <Vacio ic="🤝" txt="Sin acuerdos. Regístralos en la vista Agenda y acuerdos eligiendo esta sesión." />
+                <Vacio ic="🤝" txt="Sin acuerdos. Regístralos desde la sala de sesión para que queden en el acta." />
               )}
               {acuSel.map(a => (
                 <div key={a.id} style={{
