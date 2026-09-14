@@ -4,6 +4,7 @@ import { preloadCaps, canSync } from '../core/permisos'
 import { FinDashboard } from './FinDashboard'
 import { FinConciliacion } from './FinConciliacion'
 import { FinContabilidad } from './FinContabilidad'
+import { FinComprasPagos } from './FinComprasPagos'
 import { FinTesoreria } from './FinTesoreria'
 import { FinPresupuesto } from './FinPresupuesto'
 import { EerrFormal } from './EerrFormal'
@@ -13,7 +14,7 @@ import { FlujoCajaTab } from './clasificar/FlujoCajaTab'
 import { GmDashboard } from './gastos_menores/GmDashboard'
 import { GmMovimientos } from './gastos_menores/GmMovimientos'
 import { Toaster } from 'sonner'
-import { LayoutDashboard, BookOpenCheck, Landmark, ArrowLeftRight, LineChart, LayoutGrid, LogOut } from 'lucide-react'
+import { LayoutDashboard, BookOpenCheck, Landmark, LineChart, LayoutGrid, LogOut } from 'lucide-react'
 
 /* ═══════════════════════════════════════════════════════════════════════
    FINANZAS — Shell de navegación por DOMINIOS (arquitectura ERP)
@@ -45,15 +46,14 @@ const DOMINIOS = [
     { k: 'analisis', l: 'Análisis ejecutivo', cap: 'fin.presupuesto' },
   ]},
   { k: 'dom_contab', l: 'Contabilidad', Icono: BookOpenCheck, hojas: [
+    { k: 'conciliacion', l: 'Conciliación bancaria', cap: 'fin.conciliacion' },
+    { k: 'compras_pagos', l: 'Compras y pagos', cap: 'fin.conciliacion' },
     { k: 'contabilidad', l: 'Libros y estados', cap: 'fin.conciliacion' },
   ]},
   { k: 'dom_teso', l: 'Tesorería', Icono: Landmark, hojas: [
     { k: 'tesoreria', l: 'Cierres de caja', cap: 'fin.tesoreria' },
     { k: 'flujocaja', l: 'Flujo de caja', cap: 'fin.conciliacion' },
     { k: 'gastos', l: 'Caja chica', cap: 'gm.dashboard' },
-  ]},
-  { k: 'dom_conc', l: 'Conciliación', Icono: ArrowLeftRight, hojas: [
-    { k: 'conciliacion', l: 'Conciliación bancaria', cap: 'fin.conciliacion' },
   ]},
   { k: 'dom_gestion', l: 'Gestión', Icono: LineChart, hojas: [
     { k: 'eerr', l: 'EERR Gestión (caja)', cap: 'fin.presupuesto' },
@@ -157,6 +157,7 @@ export function FinanzasApp({ cu, setAppActual }) {
       {tabValido === "dashboard" && <FinDashboard cu={cu} isMobile={isMobile} />}
       {tabValido === "conciliacion" && <FinConciliacion cu={cu} isMobile={isMobile} />}
       {tabValido === "contabilidad" && <FinContabilidad cu={cu} isMobile={isMobile} />}
+      {tabValido === "compras_pagos" && <FinComprasPagos cu={cu} />}
       {tabValido === "tesoreria" && <FinTesoreria cu={cu} isMobile={isMobile} rol={cu?.rol} />}
       {tabValido === "presupuesto" && <FinPresupuesto cu={cu} isMobile={isMobile} />}
       {tabValido === "eerr" && <EerrFormal cu={cu} modoInicial="caja" titulo="EERR Gestión — lectura de caja (espejo del EERR contable: mismo maestro, mismas fuentes; doble clic edita costo y comisión)" />}
