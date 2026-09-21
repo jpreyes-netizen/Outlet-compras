@@ -1,0 +1,37 @@
+{
+  "name": "Outlet de Puertas — ERP",
+  "short_name": "Outlet ERP",
+  "description": "Sistema ERP unificado de Outlet de Puertas SpA: Comercial, Finanzas, Logística, RRHH y Compras.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#16213e",
+  "theme_color": "#16213e",
+  "lang": "es-CL",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "finance"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Validar pago",
+      "short_name": "Validar",
+      "description": "Solicitar validación de un pago electrónico",
+      "url": "/?app=comercial&tab=validaciones",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Tesorería",
+      "short_name": "Tesorería",
+      "description": "Bandeja de validaciones y cierre del día",
+      "url": "/?app=finanzas&tab=tesoreria",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
