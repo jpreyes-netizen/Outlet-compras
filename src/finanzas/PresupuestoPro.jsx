@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../supabase'
 import { toast } from 'sonner'
 import { exportarExcel } from './exportUtils'
@@ -89,13 +89,19 @@ function Panel({ titulo, sub, acciones, children }) {
   )
 }
 
-export function PresupuestoPro({ cu }) {
+const VISTAS_PPTO = ['control', 'edicion', 'caja', 'versiones']
+
+export function PresupuestoPro({ cu, sub, onSub, embebido }) {
   const puedeEditar = ROLES_EDITA.includes(cu?.rol)
   const puedeAprobar = ROLES_APRUEBA.includes(cu?.rol)
   const veSocios = ROLES_VE_SOCIOS.includes(cu?.rol)
 
   const [anio, setAnio] = useState(2026)
-  const [vista, setVista] = useState('control')
+  const [vista, setVista] = useState(() => VISTAS_PPTO.includes(sub) ? sub : 'control')
+  // Menú superior: el shell indica la vista (sub) y recibe los cambios internos
+  const primeraSub = useRef(true)
+  useEffect(() => { if (primeraSub.current) { primeraSub.current = false; return } if (sub && sub !== vista && VISTAS_PPTO.includes(sub)) setVista(sub) }, [sub]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onSub?.(vista) }, [vista]) // eslint-disable-line react-hooks/exhaustive-deps
   const [versiones, setVersiones] = useState([])
   const [verId, setVerId] = useState(null)
   const [lineas, setLineas] = useState([])
@@ -181,7 +187,7 @@ export function PresupuestoPro({ cu }) {
         {version && <span style={{ fontSize: 11, fontWeight: 700, color: ESTADO[version.estado]?.c ?? SLATE, border: `1px solid ${ESTADO[version.estado]?.c ?? SLATE}`, borderRadius: 999, padding: '2px 8px' }}>{ESTADO[version.estado]?.l}</span>}
         {version?.aprobado_por && <span style={{ fontSize: 11, color: SLATE }}>Aprobado por {version.aprobado_por} · {String(version.aprobado_at ?? '').slice(0, 10)}</span>}
         <div style={{ flex: 1 }} />
-        {[['control', 'Control presupuestario'], ['edicion', 'Edición'], ['caja', 'Caja'], ['versiones', 'Versiones']].map(([k, l]) => (
+        {!embebido && [['control', 'Control presupuestario'], ['edicion', 'Edición'], ['caja', 'Caja'], ['versiones', 'Versiones']].map(([k, l]) => (
           <button key={k} onClick={() => setVista(k)} style={{ ...BTN, fontWeight: vista === k ? 700 : 500, color: vista === k ? '#fff' : INK, background: vista === k ? NAVY : '#fff', borderColor: vista === k ? NAVY : BORDE }}>{l}</button>
         ))}
       </div>
