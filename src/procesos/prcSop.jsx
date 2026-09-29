@@ -1,167 +1,289 @@
-// src/procesos/prcSop.jsx
-// Generador del documento SOP en formato estándar V2.0 de Outlet de Puertas
-// (8 secciones + encabezado de control documental).
-// Lo usan por igual el build de semillas y el botón "Generar versión" de la app,
-// así el .md que aprueba la dirección y el que vive en la BD son idénticos.
+// src/procesos/PrcSOP.jsx — visor del SOP, generación de versiones y firmas
+import { useState, useMemo } from 'react'
+import { supabase } from '../supabase'
+import { sopMarkdown, hashContenido, siguienteVersion, contenidoActual, versionAlDia } from './prcSop'
+import {
+  Cd, Bt, Bd, Sheet, Markdown, Vacio, css, hoy, hora, fFecha,
+  puedeAprobar, puedeEditar, descargar, Ayuda, Hint
+} from './prcUI'
 
-const SCORE = { A: 3, M: 2, B: 1 }
-const DIRS = {
-  DIR_GENERAL: 'Dirección General', DIR_ADM_FIN: 'Dirección de Administración y Finanzas',
-  DIR_COMERCIAL: 'Dirección Comercial', DIR_OPERACIONES: 'Dirección de Operaciones',
-  DIR_NEGOCIOS: 'Dirección de Negocios', GESTION_PERSONAS: 'Gestión de Personas'
+const ACCIONES = {
+  ELABORA:  { l: 'Elaborar',  c: 'var(--text-muted)', desc: 'Registra la autoría del borrador.' },
+  REVISA:   { l: 'Revisar',   c: 'var(--info)',       desc: 'Deja el documento como POR OFICIALIZAR, listo para el comité.' },
+  APRUEBA:  { l: 'Aprobar',   c: 'var(--success)',    desc: 'Lo deja VIGENTE, deroga la versión anterior y fija la próxima revisión.' },
+  RECHAZA:  { l: 'Rechazar',  c: 'var(--danger)',     desc: 'Devuelve el documento a BORRADOR con la observación registrada.' },
+  DEROGA:   { l: 'Derogar',   c: 'var(--warning)',    desc: 'Quita la vigencia sin reemplazo.' }
 }
 
-export function sopMarkdown(d) {
-  const {
-    proceso: p, principios = [], roles = [], transicion = [], fases = [], pasos = [],
-    errores = [], kpis = [], dependencias = [], procesosRef = [], comiteNombre = '—', meta = {}
-  } = d
-  const m = {
-    version: '0.1', estado: 'BORRADOR', fecha: new Date().toISOString().slice(0, 10),
-    elaborado_por: '—', revisado_por: null, aprobado_por: null, meses_revision: 6, ...meta
-  }
-  const ord = (a, b) => (a.orden || 0) - (b.orden || 0)
-  const fs = [...fases].sort(ord)
-  // numeración F.N de cada paso, para citar los destinos de las decisiones
-  const numeroPaso = new Map()
-  fs.forEach((f, fi) => {
-    pasos.filter(x => x.fase_id === f.id).sort(ord).forEach((x, i) => numeroPaso.set(x.id, `${fi + 1}.${i + 1}`))
-  })
-  const L = []
+export function PrcSOP({ proceso, bundle, matriz, comites, cu, docs, firmas, onRecargar, toast }) {
+  const [verDoc, setVerDoc] = useState(null)
+  const [firmando, setFirmando] = useState(null)     // {doc, accion}
+  const [comentario, setComentario] = useState('')
+  const [busy, setBusy] = useState(false)
 
-  L.push(`# SOP-${p.id} — ${p.nombre}`)
-  L.push('')
-  L.push('| Control documental | |')
-  L.push('|---|---|')
-  L.push('| Empresa | Outlet de Puertas SpA |')
-  L.push(`| Área responsable | ${DIRS[p.direccion_responsable] || p.direccion_responsable || '—'} |`)
-  L.push(`| Documento | SOP-${p.id} · versión ${m.version} (${m.estado}) |`)
-  L.push(`| Categoría / Onda | ${p.categoria} · ${String(p.onda || '').replace('_', ' ')} |`)
-  L.push(`| Prioridad | Impacto ${p.impacto} × Urgencia ${p.urgencia} = score ${(SCORE[p.impacto] || 0) * (SCORE[p.urgencia] || 0)} |`)
-  L.push(`| Dueño del proceso | ${p.dueno_cargo || '—'}${p.dueno_persona ? ' — ' + p.dueno_persona : ''}${p.dueno_provisional ? ' *(cargo vacante — dueño provisional)*' : ''} |`)
-  L.push(`| Comité que aprueba | ${comiteNombre} |`)
-  L.push(`| Fecha de emisión | ${m.fecha} |`)
-  L.push(`| Elaborado por | ${m.elaborado_por} |`)
-  L.push(`| Revisado por | ${m.revisado_por || '*pendiente*'} |`)
-  L.push(`| Aprobado por | ${m.aprobado_por || '*pendiente*'} |`)
-  L.push(`| Próxima revisión | ${m.meses_revision} meses desde la aprobación |`)
-  L.push('')
-  L.push('> **Aviso de vigencia.** Desde la fecha de vigencia de este SOP, todo procedimiento anterior sobre la misma materia queda sin efecto. El incumplimiento se considera falta operativa.')
-  L.push('')
-  L.push('---')
-  L.push('')
-  L.push('## 1. Objetivo')
-  L.push('')
-  L.push(p.objetivo || '*Pendiente de redacción.*')
-  L.push('')
-  L.push('## 2. Alcance')
-  L.push('')
-  L.push(p.alcance || '*Pendiente de redacción.*')
-  L.push('')
-  L.push('## 3. Principios operativos')
-  L.push('')
-  if (principios.length) [...principios].sort(ord).forEach(x => L.push(`- ${x.texto}`))
-  else L.push('*Sin principios registrados.*')
-  L.push('')
-  L.push('> ### ⚠ REGLA CRÍTICA')
-  L.push(`> ${p.regla_critica || '*Pendiente de definición.*'}`)
-  L.push('')
-  L.push('## 4. Roles y límites')
-  L.push('')
-  if (roles.length) {
-    L.push('| Rol | Función en ESTE proceso | Límite — qué NO puede hacer |')
-    L.push('|---|---|---|')
-    ;[...roles].sort(ord).forEach(r => L.push(`| **${r.rol}** | ${r.funcion || '—'} | ${r.limite || '—'} |`))
-  } else L.push('*Sin roles registrados.*')
-  L.push('')
-  L.push('## 5. Estado de transición')
-  L.push('')
-  if (transicion.length) {
-    L.push('| Dimensión | Cómo funciona HOY | Cómo debe funcionar |')
-    L.push('|---|---|---|')
-    ;[...transicion].sort(ord).forEach(t => L.push(`| ${t.dimension} | ${t.hoy || '—'} | ${t.debe_ser || '—'} |`))
-  } else L.push('*Sin diagnóstico de transición registrado.*')
-  L.push('')
-  L.push('## 6. Flujo operativo por fases')
-  L.push('')
-  if (!fs.length) L.push('*Sin fases registradas.*')
-  fs.forEach((f, fi) => {
-    const ps = pasos.filter(x => x.fase_id === f.id).sort(ord)
-    const es = errores.filter(x => x.fase_id === f.id).sort(ord)
-    L.push(`### Fase ${fi + 1} — ${f.nombre}`)
-    L.push('')
-    const apoyo = (f.responsables_apoyo || []).filter(Boolean)
-    L.push(`*${f.descripcion || 'Sin descripción.'}* · Responsable principal: **${f.responsable_principal || '—'}**`
-      + (apoyo.length ? ` · Con: ${apoyo.map(a => `**${a}**`).join(', ')}` : ''))
-    L.push('')
-    L.push('| N° | Acción | Responsable | Participan | Sistema | Documento | Control / tiempo |')
-    L.push('|---|---|---|---|---|---|---|')
-    ps.forEach((s, si) => {
-      const marca = s.es_control_critico ? ' 🔴' : s.es_decision ? ' ◆' : ''
-      const dest = id => numeroPaso.has(id) ? ` (paso ${numeroPaso.get(id)})` : ''
-      const ramas = s.es_decision
-        ? ` <br/>**Sí →** ${s.rama_si || '—'}${s.rama_si_destino ? dest(s.rama_si_destino) : ''}`
-          + ` <br/>**No →** ${s.rama_no || '—'}${s.rama_no_destino ? dest(s.rama_no_destino) : ''}`
-        : ''
-      const parts = (s.participantes || []).filter(Boolean)
-      const doc = s.documento ? (s.documento_url ? `[${s.documento}](${s.documento_url})` : s.documento) : '—'
-      L.push(`| ${fi + 1}.${si + 1}${marca} | ${s.accion}${ramas} | ${s.responsable || '—'} | ${parts.length ? parts.join(', ') : '—'} | ${s.sistema || '—'} | ${doc} | ${s.control_tiempo || '—'} |`)
-    })
-    L.push('')
-    if (es.length) {
-      L.push('**Errores frecuentes de la fase**')
-      L.push('')
-      L.push('| Error | Consecuencia | Prevención |')
-      L.push('|---|---|---|')
-      es.forEach(e => L.push(`| ${e.error} | ${e.consecuencia || '—'} | ${e.prevencion || '—'} |`))
-      L.push('')
+  const sops = useMemo(() => docs.filter(d => d.tipo === 'SOP')
+    .sort((a, b) => String(b.version).localeCompare(String(a.version), undefined, { numeric: true })), [docs])
+  const vigente = sops.find(d => d.es_vigente)
+  // El contenido vivo (Resumen / Editar) es el que manda; cada versión es una foto.
+  const alDia = d => versionAlDia(d, proceso, bundle)
+  const ultimaAlDia = sops[0] && alDia(sops[0])
+  // Sin elección explícita: si la última versión quedó atrás, se muestra el
+  // contenido actual (lo mismo que el Resumen), no una foto antigua.
+  const porDefecto = ultimaAlDia ? sops[0] : (vigente && alDia(vigente) ? vigente : null)
+  const verActual = verDoc === 'ACTUAL' || (!verDoc && !porDefecto)
+  const actual = verActual ? null : (verDoc ? sops.find(d => d.id === verDoc) : porDefecto)
+  const desfasada = !!actual && !alDia(actual)
+  const comiteNombre = (comites.find(c => c.codigo === proceso.comite_codigo) || {}).nombre || '—'
+
+  // Vista previa en vivo. Si hay una versión seleccionada sin markdown guardado
+  // (por ejemplo un documento cargado desde la semilla), se rinde con SU versión
+  // y estado, no con el número de la siguiente.
+  const previa = useMemo(() => sopMarkdown({
+    proceso, ...bundle, procesosRef: matriz, comiteNombre,
+    meta: {
+      version: actual?.version || (verActual && ultimaAlDia ? sops[0].version : siguienteVersion(sops[0]?.version || '0.0')),
+      estado: actual?.estado || 'BORRADOR', fecha: actual?.fecha_emision || hoy(),
+      elaborado_por: actual?.elaborado_por || cu?.nombre || '—',
+      revisado_por: actual?.revisado_por, aprobado_por: actual?.aprobado_por,
+      meses_revision: proceso.meses_revision || 6
     }
-  })
-  L.push('🔴 = control crítico · ◆ = punto de decisión')
-  L.push('')
-  L.push('## 7. Indicadores')
-  L.push('')
-  if (kpis.length) {
-    L.push('| Indicador | Definición operacional | Meta | Frecuencia | Responsable |')
-    L.push('|---|---|---|---|---|')
-    ;[...kpis].sort(ord).forEach(k => L.push(
-      `| ${k.es_kpi_ancla ? '**' + k.indicador + '** ⚓' : k.indicador} | ${k.definicion_operacional || '—'} | ${k.meta || '—'} | ${k.frecuencia || '—'} | ${k.responsable || '—'} |`))
-    L.push('')
-    L.push('⚓ = indicador ancla del proceso')
-  } else L.push('*Sin indicadores registrados.*')
-  L.push('')
-  L.push('## 8. Relación con otros procesos')
-  L.push('')
-  if (dependencias.length) {
-    L.push('| Proceso | Nombre | Tipo de relación |')
-    L.push('|---|---|---|')
-    dependencias.forEach(dep => {
-      const o = procesosRef.find(x => x.id === dep.depende_de_id)
-      L.push(`| ${dep.depende_de_id} | ${o ? o.nombre : '—'} | ${dep.tipo} |`)
+  }), [proceso, bundle, matriz, comiteNombre, sops, cu, actual])
+
+  const md = verActual ? previa : (actual?.contenido_md || previa)
+  const firmasDoc = d => firmas.filter(f => f.documento_id === d?.id)
+    .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')))
+
+  /* ── generar nueva versión con snapshot inmutable ───────────────────────── */
+  const generarVersion = async () => {
+    if (!puedeEditar(cu)) return toast('Tu rol no permite generar versiones del SOP.', 'err')
+    setBusy(true)
+    const version = siguienteVersion(sops[0]?.version || '0.0')
+    const id = `DOC-SOP-${proceso.id}-v${version}`
+    if (ultimaAlDia) { setBusy(false); return toast(`La v${sops[0].version} ya refleja el contenido actual: no hace falta otra versión.`) }
+    const contenido = contenidoActual(proceso, bundle)
+    const contenido_md = sopMarkdown({
+      proceso, ...bundle, procesosRef: matriz, comiteNombre,
+      meta: { version, estado: 'BORRADOR', fecha: hoy(), elaborado_por: cu?.nombre || '—', meses_revision: proceso.meses_revision || 6 }
     })
-  } else L.push('Sin dependencias registradas.')
-  L.push('')
-  L.push('---')
-  L.push('')
-  L.push(`*Documento en estado ${m.estado}. Generado desde el módulo Procesos del ERP Outlet el ${m.fecha}.`
-    + `${m.estado === 'VIGENTE' ? '' : ' No tiene validez operativa hasta su aprobación firmada en el comité correspondiente.'}*`)
-  return L.join('\n')
-}
-
-/** Hash estable del contenido, para detectar si una versión firmada fue alterada. */
-export function hashContenido(txt) {
-  let h1 = 0x811c9dc5, h2 = 0x01000193
-  const s = String(txt || '')
-  for (let i = 0; i < s.length; i++) {
-    const c = s.charCodeAt(i)
-    h1 = Math.imul(h1 ^ c, 16777619) >>> 0
-    h2 = Math.imul(h2 + c, 2654435761) >>> 0
+    const { error } = await supabase.from('prc_documentos').insert({
+      id, proceso_id: proceso.id, tipo: 'SOP', codigo: `SOP-${proceso.id}`,
+      nombre_archivo: `SOP_${proceso.id}_v${version}.md`, version, estado: 'BORRADOR',
+      contenido, contenido_md, hash_contenido: hashContenido(contenido_md),
+      fecha_emision: hoy(), elaborado_por: cu?.nombre || '—', es_vigente: false,
+      notas: 'Versión generada desde el módulo Procesos a partir del contenido vigente del proceso.'
+    })
+    if (error) { setBusy(false); return toast('No se pudo crear la versión: ' + error.message, 'err') }
+    await supabase.from('prc_firmas').insert({
+      id: `F-${id}-ELAB`, documento_id: id, proceso_id: proceso.id, usuario_id: cu?.id,
+      nombre_usuario: cu?.nombre || '—', rol_usuario: cu?.rol, accion: 'ELABORA',
+      comentario: 'Versión generada desde el módulo Procesos.', hash_documento: hashContenido(contenido_md),
+      fecha: hoy(), hora: hora()
+    })
+    setBusy(false); setVerDoc(id); toast(`SOP-${proceso.id} versión ${version} creada como borrador.`)
+    onRecargar()
   }
-  return (h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')).toUpperCase()
-}
 
-/** Siguiente número de versión: 0.1 → 0.2 … y 0.9 → 1.0 al aprobar. */
-export function siguienteVersion(actual, mayor) {
-  const [a, b] = String(actual || '0.0').split('.').map(x => parseInt(x, 10) || 0)
-  return mayor ? `${a + 1}.0` : `${a}.${b + 1}`
+  /* ── firmar ─────────────────────────────────────────────────────────────── */
+  const firmar = async () => {
+    const { doc, accion } = firmando
+    if (!comentario.trim()) return toast('El comentario es obligatorio para dejar registro de la firma.', 'err')
+    if (accion === 'APRUEBA' && !puedeAprobar(cu)) return toast('Tu rol no puede aprobar documentos.', 'err')
+    if ((accion === 'REVISA' || accion === 'APRUEBA') && !alDia(doc))
+      return toast(`La v${doc.version} no refleja el contenido actual del proceso. Guarda una nueva versión y firma esa.`, 'err')
+    setBusy(true)
+    const { error } = await supabase.from('prc_firmas').insert({
+      id: `F-${doc.id}-${accion}-${Date.now().toString(36)}`,
+      documento_id: doc.id, proceso_id: proceso.id, usuario_id: cu?.id,
+      nombre_usuario: cu?.nombre || '—', rol_usuario: cu?.rol, accion,
+      comentario: comentario.trim(), firma_digital: cu?.firma_digital || null,
+      hash_documento: doc.hash_contenido, comite_codigo: proceso.comite_codigo,
+      fecha: hoy(), hora: hora()
+    })
+    setBusy(false)
+    if (error) return toast('No se pudo registrar la firma: ' + error.message, 'err')
+    setFirmando(null); setComentario('')
+    toast(`${ACCIONES[accion].l}: ${doc.codigo} v${doc.version} firmado por ${cu?.nombre}.`)
+    onRecargar()
+  }
+
+  const acciones = d => {
+    if (!d) return []
+    const l = []
+    if (d.estado === 'BORRADOR') l.push('REVISA', 'APRUEBA')
+    else if (d.estado === 'POR_OFICIALIZAR') l.push('APRUEBA', 'RECHAZA')
+    else if (d.estado === 'VIGENTE') l.push('DEROGA')
+    return l
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+
+      <Ayuda k="sop" titulo="Cómo se oficializa un SOP">
+        <p style={{ margin: '0 0 6px' }}>
+          Esta pantalla convierte el contenido del proceso en un documento oficial firmado. El ciclo tiene tres botones,
+          en este orden:
+        </p>
+        <ul style={{ margin: '0 0 6px 16px', padding: 0 }}>
+          <li><b>Guardar como nueva versión</b> — toma una foto del contenido actual (fases, pasos, roles, KPI) y crea
+            un documento con número de versión. Queda en estado BORRADOR y ya se puede firmar. Si después editas el
+            contenido, esta versión no cambia: hay que guardar otra.</li>
+          <li><b>Revisar</b> — el dueño del proceso confirma que el borrador refleja la operación real. El documento
+            pasa a POR OFICIALIZAR.</li>
+          <li><b>Aprobar</b> — solo roles de dirección. El documento queda VIGENTE para toda la empresa, la versión
+            anterior se deroga automáticamente y se agenda la revisión a {proceso.meses_revision || 6} meses.</li>
+        </ul>
+        <p style={{ margin: 0 }}>
+          Todas las firmas piden un comentario obligatorio y quedan en el timeline con nombre, rol, fecha y hora.
+          Los botones que corresponden aparecen según el estado; si no ves uno, es porque ese paso ya está hecho o
+          tu rol no lo permite.
+        </p>
+      </Ayuda>
+
+      <Cd style={{ padding: 13 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            {sops.length === 0 && <Bd c="var(--warning)">Sin versiones guardadas · vista previa desde el contenido del proceso</Bd>}
+            {sops.length > 0 && !ultimaAlDia && (
+              <button onClick={() => setVerDoc('ACTUAL')} title="Lo mismo que muestra el Resumen: el contenido vigente del proceso, todavía sin guardar como versión" style={{
+                padding: '5px 10px', borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                border: `1px solid ${verActual ? 'var(--warning)' : 'var(--border-2)'}`,
+                background: verActual ? 'var(--warning-bg)' : 'var(--bg-surface)',
+                color: verActual ? 'var(--warning-text)' : 'var(--text-secondary)'
+              }}>Contenido actual · sin versión</button>
+            )}
+            {sops.map(d => (
+              <button key={d.id} onClick={() => setVerDoc(d.id)} style={{
+                padding: '5px 10px', borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                border: `1px solid ${actual?.id === d.id ? 'var(--accent)' : 'var(--border-2)'}`,
+                background: actual?.id === d.id ? 'var(--accent-bg)' : 'var(--bg-surface)',
+                color: actual?.id === d.id ? 'var(--accent-text)' : 'var(--text-secondary)'
+              }} title={alDia(d) ? 'Esta versión refleja el contenido actual del proceso' : 'Foto anterior: el contenido del proceso cambió después de guardarla'}>
+                v{d.version} {d.es_vigente ? '· vigente' : `· ${d.estado.toLowerCase().replace('_', ' ')}`}{alDia(d) ? ' ✓' : ' · desactualizada'}
+              </button>
+            ))}
+          </div>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+            <Bt v="sec" sm title="Baja el documento como archivo de texto para adjuntarlo o imprimirlo"
+              onClick={() => descargar(actual?.nombre_archivo || `SOP_${proceso.id}_preview.md`, md, 'text/markdown;charset=utf-8')}>
+              Descargar .md
+            </Bt>
+            <Bt v="pri" sm dis={busy || !puedeEditar(cu) || ultimaAlDia} onClick={generarVersion}
+              title={ultimaAlDia ? `La v${sops[0].version} ya refleja el contenido actual: edita el proceso para generar otra` : 'Congela el contenido actual del proceso en un documento con número de versión, listo para firmar'}>
+              Guardar como nueva versión
+            </Bt>
+            {acciones(actual).filter(a => !desfasada || (a !== 'REVISA' && a !== 'APRUEBA')).map(a => (
+              <Bt key={a} sm dis={busy} v={a === 'APRUEBA' ? 'ok' : a === 'RECHAZA' ? 'dan' : a === 'DEROGA' ? 'warn' : 'sec'}
+                title={ACCIONES[a].desc}
+                onClick={() => { setFirmando({ doc: actual, accion: a }); setComentario('') }}>
+                {ACCIONES[a].l}
+              </Bt>
+            ))}
+          </div>
+        </div>
+        <Hint style={{ marginTop: 8 }}>
+          Las pestañas de versión de la izquierda te dejan ver cualquier versión anterior. La marcada como
+          <b> vigente</b> es la única con validez operativa.
+        </Hint>
+        {actual && (
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-1)', display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--text-muted)' }}>
+            <span>Documento <b style={{ color: 'var(--text-primary)' }}>{actual.codigo} v{actual.version}</b></span>
+            <span>Emitido {fFecha(actual.fecha_emision)}</span>
+            <span>Elaborado por {actual.elaborado_por || '—'}</span>
+            <span>Revisado por {actual.revisado_por || '—'}</span>
+            <span>Aprobado por {actual.aprobado_por || '—'}</span>
+            {actual.proxima_revision && <span>Próxima revisión {fFecha(actual.proxima_revision)}</span>}
+            {actual.hash_contenido && <span title="Huella del contenido firmado">Hash {actual.hash_contenido.slice(0, 12)}</span>}
+          </div>
+        )}
+      </Cd>
+
+      {firmasDoc(actual).length > 0 && (
+        <Cd style={{ padding: 13 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 9 }}>Timeline de firmas</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {firmasDoc(actual).map(f => (
+              <div key={f.id} style={{
+                display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 11px',
+                borderRadius: 9, background: 'var(--bg-page)', borderLeft: `3px solid ${ACCIONES[f.accion]?.c || 'var(--text-muted)'}`
+              }}>
+                <Bd c={ACCIONES[f.accion]?.c}>{ACCIONES[f.accion]?.l || f.accion}</Bd>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600 }}>{f.nombre_usuario} <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>· {f.rol_usuario || '—'}</span></div>
+                  {f.comentario && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{f.comentario}</div>}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fFecha(f.fecha)} {f.hora || ''}</div>
+              </div>
+            ))}
+          </div>
+        </Cd>
+      )}
+
+      <Cd>
+        {sops.length === 0 && (
+          <div style={{
+            padding: '9px 13px', borderRadius: 9, background: 'var(--warning-bg)',
+            color: 'var(--warning-text)', fontSize: 12, marginBottom: 12
+          }}>
+            Vista previa generada en vivo desde el contenido del proceso. Todavía no hay una versión guardada:
+            usa <b>Guardar como nueva versión</b> para dejarla registrada y poder firmarla.
+          </div>
+        )}
+        {desfasada && (
+          <div style={{ padding: '10px 13px', borderRadius: 9, background: 'var(--danger-bg)', color: 'var(--danger-text)', fontSize: 12.5, marginBottom: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ flex: 1, minWidth: 260 }}>
+              <b>Versión desactualizada.</b> La v{actual.version} ({fFecha(actual.fecha_emision)}) es una foto anterior: el contenido del
+              proceso cambió después. Lo que manda es el contenido actual (el del Resumen). Esta versión no se puede revisar ni aprobar.
+            </span>
+            <Bt sm v="sec" onClick={() => setVerDoc('ACTUAL')}>Ver contenido actual</Bt>
+            {puedeEditar(cu) && <Bt sm v="pri" dis={busy} onClick={generarVersion}>Guardar como v{siguienteVersion(sops[0]?.version || '0.0')}</Bt>}
+          </div>
+        )}
+        {verActual && sops.length > 0 && (
+          <div style={{ padding: '10px 13px', borderRadius: 9, background: 'var(--warning-bg)', color: 'var(--warning-text)', fontSize: 12.5, marginBottom: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ flex: 1, minWidth: 260 }}>
+              <b>Contenido actual del proceso</b> — igual al Resumen. Tiene cambios que ninguna versión guardada recoge todavía
+              (la última es la v{sops[0].version}). Para firmarlo, guárdalo como versión.
+            </span>
+            {puedeEditar(cu) && <Bt sm v="pri" dis={busy} onClick={generarVersion}>Guardar como v{siguienteVersion(sops[0]?.version || '0.0')}</Bt>}
+          </div>
+        )}
+        <Markdown md={md} />
+      </Cd>
+
+      <Sheet open={!!firmando} onClose={() => setFirmando(null)}
+        title={firmando ? `${ACCIONES[firmando.accion].l} · ${firmando.doc.codigo} v${firmando.doc.version}` : ''}>
+        {firmando && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{
+              padding: '10px 13px', borderRadius: 9, fontSize: 12.5,
+              background: 'var(--bg-page)', color: 'var(--text-secondary)'
+            }}>{ACCIONES[firmando.accion].desc}</div>
+            {firmando.accion === 'APRUEBA' && (
+              <div style={{ padding: '10px 13px', borderRadius: 9, background: 'var(--warning-bg)', color: 'var(--warning-text)', fontSize: 12.5 }}>
+                Al aprobar, este documento queda <b>vigente</b> para toda la empresa, la versión anterior se deroga
+                automáticamente y se agenda la revisión a {proceso.meses_revision || 6} meses. El procedimiento
+                anterior sobre la misma materia queda sin efecto.
+              </div>
+            )}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Comentario (obligatorio)</label>
+              <textarea rows={4} value={comentario} onChange={e => setComentario(e.target.value)}
+                placeholder="Qué revisaste, qué cambia respecto de la versión anterior, condiciones de la aprobación…"
+                style={{ ...css.input, marginTop: 5, resize: 'vertical', fontFamily: 'inherit' }} />
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+              Firma: <b>{cu?.nombre}</b> · {cu?.rol} · {fFecha(hoy())} {hora()}
+              {proceso.comite_codigo ? ` · comité ${proceso.comite_codigo}` : ''}
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <Bt v="sec" onClick={() => setFirmando(null)}>Cancelar</Bt>
+              <Bt v={firmando.accion === 'RECHAZA' ? 'dan' : 'ok'} dis={busy || !comentario.trim()} onClick={firmar}>
+                Firmar {ACCIONES[firmando.accion].l.toLowerCase()}
+              </Bt>
+            </div>
+          </div>
+        )}
+      </Sheet>
+    </div>
+  )
 }
