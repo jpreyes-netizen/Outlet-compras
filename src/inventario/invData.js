@@ -75,6 +75,16 @@ export const fetchRed        = () => pedir('v_inv_red')
 export const fetchPrioridad  = () => pedir('v_inv_prioridad_compra', q => q.order('prioridad'))
 export const fetchAsignacion = () => pedir('v_inv_asignacion', q => q.gt('enviar_sugerido', 0))
 export const fetchPoliticas  = () => pedir('inv_politica_tipo', q => q.order('tipo_producto'))
+export const fetchScorecard  = () => pedir('v_inv_scorecard')
+export const fetchComparable = () => pedir('v_inv_comparable')
+export const fetchRebalanceo = () => pedir('v_inv_rebalanceo', q => q.order('venta_recuperable', { ascending: false }))
+
+/* Recalcula la capa KPI materializada (≈5 s). Se usa tras editar políticas. */
+export async function recalcularKpi() {
+  const { data, error } = await supabase.rpc('fn_inv_refresh_kpi')
+  if (error) throw new Error(error.message)
+  return data
+}
 
 export async function fetchSalud() {
   const { data, error } = await supabase.from('v_inv_salud_datos').select('*')
@@ -112,8 +122,6 @@ export function calcularKpis(filas) {
   const cuenta = e => filas.filter(f => f.estado === e).length
   const suma = (fs, campo) => fs.reduce((a, x) => a + (+x[campo] || 0), 0)
   const valor = suma(filas, 'valor_costo')
-  const cogs  = filas.reduce((a, f) => a + (+f.venta_364d || 0) * (+f.costo_unit || 0), 0)
-  const neto  = suma(filas, 'neto_364d')
   const activos = filas.filter(f => +f.demanda_dia > 0)
   const inertes = filas.filter(f => f.estado === 'MUERTO' || f.estado === 'SIN ROTACION')
 
@@ -127,8 +135,6 @@ export function calcularKpis(filas) {
     pctQuiebre: activos.length ? suma(activos, 'pct_quiebre') / activos.length : 0,
     ventaPerdida: suma(filas, 'venta_perdida_84d'),
     inversionRequerida: filas.reduce((a, f) => a + (+f.sugerido || 0) * (+f.costo_unit || 0), 0),
-    rotacion: valor > 0 ? cogs / valor : 0,
-    gmroi: valor > 0 ? (neto - cogs) / valor : 0,
     coberturaMedia: activos.length ? suma(activos, 'dias_cobertura') / activos.length : 0,
   }
 }
