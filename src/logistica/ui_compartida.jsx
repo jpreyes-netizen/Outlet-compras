@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react'
+
 // ============================================================
 // OUTLET LOGÍSTICA — ui_compartida.jsx
 // Tokens de tema + componentes UI compartidos entre LogisticaApp
@@ -12,7 +14,7 @@ const BRAND_ORANGE    = '#E8660A'
 // ──────────────────────────────────────────────────────────────
 const css = {
   // ── Layout ──────────────────────────────────────────────────────────────────
-  appWrap: {display:'flex',minHeight:'100vh',background:'#F2F2F7',fontFamily:FONT},
+  appWrap: {display:'flex',minHeight:'100vh',background:'#F4F5F7',fontFamily:FONT},
   sidebar: {width:220,background:SIDEBAR_BG,display:'flex',flexDirection:'column',
     position:'fixed',top:0,left:0,bottom:0,zIndex:200,
     boxShadow:'4px 0 24px rgba(0,0,0,0.35)'},
@@ -31,7 +33,7 @@ const css = {
     border:active?'1px solid rgba(255,255,255,0.18)':'1px solid transparent',
     transition:'all 0.15s',
   }),
-  main:   {marginLeft:220,flex:1,display:'flex',flexDirection:'column',minHeight:'100vh'},
+  main:   {marginLeft:0,flex:1,display:'flex',flexDirection:'column',minHeight:'100vh'},
   topbar: {background:'#fff',borderBottom:'1px solid #E5E5EA',
     padding:'12px 28px',                    // +2px vertical, +4px horizontal
     display:'flex',alignItems:'center',justifyContent:'space-between',
@@ -92,17 +94,36 @@ function Bt({children,v='pri',onClick,dis=false,full=false,sm=false,ic=null,tool
     minHeight:sm?36:44,                     // altura mínima táctil
   }
   const vars={
-    pri:{background:'#007AFF',color:'#fff',boxShadow:'0 2px 8px rgba(0,122,255,0.3)'},
-    suc:{background:'#34C759',color:'#fff',boxShadow:'0 2px 8px rgba(52,199,89,0.3)'},
-    dan:{background:'#FF3B30',color:'#fff',boxShadow:'0 2px 8px rgba(255,59,48,0.3)'},
-    pur:{background:'#5856D6',color:'#fff',boxShadow:'0 2px 8px rgba(88,86,214,0.3)'},
-    amb:{background:'#FF9500',color:'#fff',boxShadow:'0 2px 8px rgba(255,149,0,0.3)'},
-    gry:{background:'#F2F2F7',color:'#1C1C1E',boxShadow:'none'},
-    out:{background:'transparent',color:'#007AFF',border:'1.5px solid #007AFF',boxShadow:'none'},
+    pri:{background:'#16213E',color:'#fff',boxShadow:'0 1px 2px rgba(22,33,62,0.25)'},
+    suc:{background:'#1E7A44',color:'#fff',boxShadow:'0 1px 2px rgba(30,122,68,0.25)'},
+    dan:{background:'#B42318',color:'#fff',boxShadow:'0 1px 2px rgba(180,35,24,0.25)'},
+    pur:{background:'#6941C6',color:'#fff',boxShadow:'0 1px 2px rgba(105,65,198,0.25)'},
+    amb:{background:'#B25E09',color:'#fff',boxShadow:'0 1px 2px rgba(178,94,9,0.25)'},
+    gry:{background:'#EEF1F7',color:'#16213E',boxShadow:'none'},
+    out:{background:'transparent',color:'#16213E',border:'1.5px solid #16213E',boxShadow:'none'},
     dark:{background:'#1C1C1E',color:'#fff',boxShadow:'0 2px 8px rgba(0,0,0,0.2)'},
     brand:{background:BRAND_ORANGE,color:'#fff',boxShadow:`0 2px 8px ${BRAND_ORANGE}50`},
   }
   return <button style={{...base,...(vars[v]||vars.pri)}} onClick={!dis?onClick:undefined} disabled={dis} title={tooltip||undefined}>{ic&&<span>{ic}</span>}{children}</button>
 }
 
-export { FONT, SIDEBAR_BG, BRAND_ORANGE, css, Bt }
+// ─── NAVEGACIÓN DESDE EL MENÚ SUPERIOR (patrón Finanzas · 30-sep-2026) ─────
+// El shell entrega nav = {sub, n}: sub = subpantalla pedida en el menú, n = contador
+// que sube en cada clic (así, volver a elegir la misma opción también navega).
+// · subInicial: valor inicial del estado interno si la sub pedida es válida.
+// · useNavMenu: aplica la sub al montar y en cada clic del menú, y avisa al shell
+//   (onSub) la subpantalla activa para la ruta de navegación. Sin nav no hace nada.
+const subInicial = (nav, validos, def) => (nav?.sub && validos.includes(nav.sub)) ? nav.sub : def
+function useNavMenu(nav, aplicar, valor, onSub, validos) {
+  const ult = useRef(null)
+  useEffect(() => {
+    if (!nav || nav.n === ult.current) return
+    ult.current = nav.n
+    if (nav.sub) aplicar(nav.sub)
+  }, [nav?.n]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (onSub && valor && (!validos || validos.includes(valor))) onSub(valor)
+  }, [valor]) // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+export { FONT, SIDEBAR_BG, BRAND_ORANGE, css, Bt, subInicial, useNavMenu }
