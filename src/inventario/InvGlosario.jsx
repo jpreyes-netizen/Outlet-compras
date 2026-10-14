@@ -2,11 +2,16 @@
 
 import { Panel, Leyenda } from './invUI'
 import { nivelesDesde, usosDesde, TRAMOS_COB, ACCIONES, CL_ESTADO, AYUDA_ESTADO, CL_PATRON, AYUDA_PATRON, ESTADOS_ALERTA, CL_ABC } from './invData'
+import { METODOLOGIA, METODOS } from './invProyeccion'
 
 export function InvGlosario({ cfg }) {
   const g = (titulo, items, nota) => <Panel titulo={titulo}><Leyenda titulo="Definiciones" items={items} nota={nota} /></Panel>
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {g('Venta promedio: el algoritmo', [
+        ...METODOLOGIA.map((t, i) => ({ t: `${i + 1}.`, d: t })),
+        ...Object.values(METODOS).map(m => ({ t: m.l, d: m.d })),
+      ], 'En la ficha de cada producto se ve este cálculo con sus cifras reales: ventana, unidades, días con stock y resultado, con su historia mensual y su proyección.')}
       {g('Situación del producto (antigüedad)', nivelesDesde(cfg).map(n => ({ c: n.c, t: n.l, d: n.d })),
         'Días sin moverse: desde la última venta (en el CD, el último despacho) o la última llegada, lo más reciente. Los umbrales se editan en Configuración.')}
       {g('Estado de reposición (salas)', Object.keys(CL_ESTADO).map(k => ({ c: CL_ESTADO[k], t: k.charAt(0) + k.slice(1).toLowerCase(), d: AYUDA_ESTADO[k] })),
